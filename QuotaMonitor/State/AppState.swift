@@ -20,7 +20,7 @@ public final class AppState: ObservableObject {
 
     private let networking = NetworkingService.shared
     private let alertStateMachine = AlertStateMachine()
-    private let notifications = NotificationManager.shared
+    private lazy var notifications = NotificationManager.shared
     private let bark = BarkClient()
     private let logger = Logger(subsystem: "app.quotamonitor", category: "AppState")
 

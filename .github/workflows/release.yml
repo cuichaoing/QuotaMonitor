@@ -17,7 +17,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Extract version from tag
         id: version
@@ -55,7 +55,7 @@ jobs:
             "build/QuotaMonitor.app"
 
       - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: QuotaMonitor-${{ steps.version.outputs.VERSION }}-macos
           path: |

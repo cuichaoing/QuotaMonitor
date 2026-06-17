@@ -1,7 +1,7 @@
 # QuotaMonitor
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Platform: macOS 12+](https://img.shields.io/badge/platform-macOS%2012%2B-lightgrey.svg)](#系统要求)
+[![Platform: macOS 13+](https://img.shields.io/badge/platform-macOS%2013%2B-lightgrey.svg)](#系统要求)
 [![Swift: 5.9+](https://img.shields.io/badge/Swift-5.9%2B-orange.svg)](https://swift.org)
 [![Tests: 105/105](https://img.shields.io/badge/tests-105%2F105%20passing-brightgreen.svg)](#单元测试)
 
@@ -49,7 +49,7 @@ macOS 状态栏原生应用，实时监控 Kimi Code / MiniMax / 智谱 GLM 三�
 
 ## 系统要求
 
-- macOS 12 (Monterey) 及以上
+- macOS 13 (Ventura) 及以上
 - Apple Silicon（M1/M2/M3）或 Intel Mac
 - 状态栏驻留应用（不显示在 Dock）
 

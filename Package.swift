@@ -4,7 +4,7 @@ import PackageDescription
 let package = Package(
     name: "QuotaMonitor",
     platforms: [
-        .macOS(.v12)  // async test 需要 macOS 12+
+        .macOS(.v13)  // SMAppService 需要 macOS 13+
     ],
     targets: [
         .executableTarget(
@@ -13,6 +13,9 @@ let package = Package(
             exclude: [
                 "Resources/Info.plist",
                 "Resources/QuotaMonitor.entitlements"
+            ],
+            linkerSettings: [
+                .linkedFramework("ServiceManagement")
             ]
         ),
         .testTarget(

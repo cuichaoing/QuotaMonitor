@@ -75,3 +75,6 @@ CLAUDE.md
 # Handoff 上下文（母港 AgentForge 给项目 sub-agent 的工作记忆，不是项目代码）
 docs/HANDOFF_*.md
 docs/handoff_*.md
+
+# 本地监控脚本（避免 Co-Authored-By 污染 Contributors）
+scripts/monitor.sh

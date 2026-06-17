@@ -4,6 +4,21 @@ QuotaMonitor 版本变更历史。
 
 ---
 
+## [1.0.2] - 2026-06-17
+
+**UI 修复** — 阈值颜色实时响应设置变更，阈值支持数字框精确输入。
+
+### 修复
+
+- **阈值 slider 颜色失效**：`MenuBarController.nsColor(for:)` 改读 `SettingsStore`，`observeState()` 用 `Publishers.Merge3` 监听 3 个 `$publisher`，避免 `objectWillChange` 1 帧滞后
+- **ThresholdSlider 加可编辑 TextField**：slider 拖动 + 数字框输入双向同步
+
+### 已知问题
+
+- GLM 周维度（`TOKENS_LIMIT + unit=6`）和 MCP 月度（`TIME_LIMIT + unit=5`）暂未展示
+
+---
+
 ## [1.0.1] - 2026-06-17 (热修)
 
 **3 平台 Provider 解析逻辑全部按真实 API 响应重写** — 根因：v1.0 全部基于猜测的字段路径，实际响应结构与假设不符。

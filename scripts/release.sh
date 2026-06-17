@@ -45,16 +45,23 @@ fi
 echo "✓ clean"
 
 # 3. 更新 Info.plist 版本号
+# 源文件纳入版本控制，本地 build 和 CI 都从同一文件复制
 echo ""
 echo "[3/5] 更新 Info.plist 版本号到 $VERSION..."
-PLIST="build/QuotaMonitor.app/Contents/Info.plist"
-if [ -f "$PLIST" ]; then
-    /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" "$PLIST"
+SOURCE_PLIST="QuotaMonitor/Resources/Info.plist"
+BUILD_PLIST="build/QuotaMonitor.app/Contents/Info.plist"
+if [ -f "$SOURCE_PLIST" ]; then
+    /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" "$SOURCE_PLIST"
     BUILD=$(git rev-list --count HEAD)
-    /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $BUILD" "$PLIST"
-    echo "✓ CFBundleShortVersionString=$VERSION, CFBundleVersion=$BUILD"
+    /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $BUILD" "$SOURCE_PLIST"
+    echo "✓ Source plist: CFBundleShortVersionString=$VERSION, CFBundleVersion=$BUILD"
+    # 同步到本地 build 目录（如果存在），保持本地构建产物一致
+    if [ -f "$BUILD_PLIST" ]; then
+        cp "$SOURCE_PLIST" "$BUILD_PLIST"
+        echo "✓ Local build plist synced"
+    fi
 else
-    echo "⚠ $PLIST 不存在，跳过"
+    echo "⚠ $SOURCE_PLIST 不存在，跳过"
 fi
 
 # 4. commit + tag + push

@@ -4,6 +4,19 @@ QuotaMonitor 版本变更历史。
 
 ---
 
+## [1.0.3] - 2026-06-17
+
+**修复 GitHub Release 的 .dmg 安装包无法启动的问题** — 根因：CI 打包步骤未复制 `Info.plist`，导致 .app bundle 结构不完整。
+
+### 修复
+
+- **CI 打包修复**：`.github/workflows/release.yml` 的 Package .app 步骤现在会复制 `QuotaMonitor/Resources/Info.plist`
+- **源码管理 Info.plist**：将 `Info.plist` 和 `QuotaMonitor.entitlements` 纳入版本控制，本地构建与 CI 使用同一份配置
+- **release.sh 更新**：版本号 bump 现在修改源代码中的 `Info.plist`，并同步到本地 build 目录
+- **README 构建步骤更新**：本地手动打包步骤加入 `Info.plist` 复制
+
+---
+
 ## [1.0.2] - 2026-06-17
 
 **UI 修复** — 阈值颜色实时响应设置变更，阈值支持数字框精确输入。

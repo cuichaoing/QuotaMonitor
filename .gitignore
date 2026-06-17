@@ -71,3 +71,7 @@ venv/
 # Claude Code 本地工具配置（不是项目代码）
 CLAUDE.md
 .claude/
+
+# Handoff 上下文（母港 AgentForge 给项目 sub-agent 的工作记忆，不是项目代码）
+docs/HANDOFF_*.md
+docs/handoff_*.md

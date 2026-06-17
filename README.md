@@ -60,6 +60,7 @@ swift build -c release
 # 打包成 .app（必须，否则 UNUserNotificationCenter 崩溃）
 mkdir -p build/QuotaMonitor.app/Contents/MacOS
 cp .build/release/QuotaMonitor build/QuotaMonitor.app/Contents/MacOS/QuotaMonitor
+cp QuotaMonitor/Resources/Info.plist build/QuotaMonitor.app/Contents/Info.plist
 codesign --force --deep --sign - build/QuotaMonitor.app
 
 # 启动

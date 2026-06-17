@@ -37,6 +37,7 @@ jobs:
           mkdir -p build/QuotaMonitor.app/Contents/MacOS
           cp .build/release/QuotaMonitor build/QuotaMonitor.app/Contents/MacOS/QuotaMonitor
           chmod +x build/QuotaMonitor.app/Contents/MacOS/QuotaMonitor
+          cp QuotaMonitor/Resources/Info.plist build/QuotaMonitor.app/Contents/Info.plist
 
       - name: Code sign (ad-hoc)
         run: codesign --force --deep --sign - build/QuotaMonitor.app

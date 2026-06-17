@@ -1,0 +1,174 @@
+//
+//  NetworkingServiceTests.swift
+//  QuotaMonitorTests
+//
+//  验证并行抓取 + 数据平滑 + Key 缺失处理
+//
+
+import XCTest
+@testable import QuotaMonitor
+
+final class NetworkingServiceTests: XCTestCase {
+    var mockKeychain: InMemoryKeychainStore!
+    var client: HTTPClient!
+
+    override func setUp() {
+        super.setUp()
+        mockKeychain = InMemoryKeychainStore()
+        client = MockURLProtocol.makeHTTPClient()
+        MockURLProtocol.reset()
+    }
+
+    override func tearDown() {
+        MockURLProtocol.reset()
+        super.tearDown()
+    }
+
+    // MARK: - 并行抓取
+
+    func testFetchAll_threePlatforms_inParallel() async throws {
+        try mockKeychain.save("k1", for: .kimi)
+        try mockKeychain.save("m1", for: .minimax)
+        try mockKeychain.save("g1", for: .glm)
+
+        // 用 sleep 模拟网络延迟，验证是否真的并行
+        // 按 host 分流 mock：3 平台响应格式不同（v1.0.1 用真实 API 格式）
+        let perRequestDelay: TimeInterval = 0.2
+        MockURLProtocol.handler = { req in
+            try? await Task.sleep(nanoseconds: UInt64(perRequestDelay * 1_000_000_000))
+            let host = req.url?.host ?? ""
+            let json: String
+            switch host {
+            case "api.kimi.com":
+                json = """
+                {"limits":[{"detail":{"limit":"100","used":"50","resetTime":"2026-06-17T20:00:00Z"},"window":{"duration":300,"timeUnit":"TIME_UNIT_MINUTE"}}]}
+                """
+            case "api.minimax.io":
+                json = """
+                {"model_remains":[{"model_name":"general","current_interval_remaining_percent":50}]}
+                """
+            case "api.z.ai":
+                // v1.0.1 mock：GLM 真实响应 data.limits 格式
+                json = "{\"code\":200,\"success\":true,\"data\":{\"limits\":[{\"type\":\"TIME_LIMIT\",\"unit\":5,\"percentage\":30.0}]}}"
+            default:
+                json = "{}"
+            }
+            return MockURLProtocol.jsonResponse(url: req.url!, json: json)
+        }
+
+        let service = NetworkingService(keychain: mockKeychain, httpClient: client)
+        let start = Date()
+        let results = await service.fetchAll()
+        let elapsed = Date().timeIntervalSince(start)
+
+        XCTAssertEqual(results.count, 3)
+
+        // 串行需要 ~0.6s，并行应该 < 0.5s
+        XCTAssertLessThan(elapsed, 0.5,
+                          "3 平台应并行抓取，串行需要 ~\(perRequestDelay * 3)s，实际耗时 \(elapsed)s")
+
+        for kind in [ProviderKind.kimi, .minimax, .glm] {
+            XCTAssertNoThrow(try results[kind]?.get(),
+                            "\(kind) 应有成功结果")
+        }
+    }
+
+    // MARK: - Key 缺失
+
+    func testKeyMissing_returnsError() async throws {
+        // 故意不写入任何 Key
+        let service = NetworkingService(keychain: mockKeychain, httpClient: client)
+        let results = await service.fetchAll([.kimi])
+
+        let result = try XCTUnwrap(results[.kimi])
+        guard case .failure(let err) = result else {
+            XCTFail("Expected failure")
+            return
+        }
+        XCTAssertTrue(err.isUserActionable, "Key 缺失应引导去设置页")
+    }
+
+    func testOnlyConfiguredPlatforms_returned() async throws {
+        try mockKeychain.save("k1", for: .kimi)
+        // MiniMax / GLM 不配置
+
+        // 必须为 Kimi 设置 handler，否则 Kimi 也会因 networkUnreachable 失败
+        // v1.0.1 mock：嵌套 limits[0].detail.used
+        MockURLProtocol.handler = { req in
+            MockURLProtocol.jsonResponse(
+                url: req.url!,
+                json: "{\"limits\":[{\"detail\":{\"limit\":\"1\",\"used\":\"1\",\"resetTime\":\"2026-06-17T20:00:00Z\"},\"window\":{\"duration\":300,\"timeUnit\":\"TIME_UNIT_MINUTE\"}}]}"
+            )
+        }
+
+        let service = NetworkingService(keychain: mockKeychain, httpClient: client)
+        let results = await service.fetchAll([.kimi, .minimax, .glm])
+
+        XCTAssertNoThrow(try results[.kimi]?.get())
+        XCTAssertThrowsError(try results[.minimax]?.get())
+        XCTAssertThrowsError(try results[.glm]?.get())
+    }
+
+    // MARK: - 数据平滑
+
+    func testSmoothing_preventsDecreaseWithinSameWindow() async throws {
+        try mockKeychain.save("k1", for: .kimi)
+
+        // v1.0.1 mock：Kimi 真实响应格式，detail.used 直接是已用
+        var usedValue: Double = 60
+        MockURLProtocol.handler = { req in
+            let json = """
+            {"limits":[{"detail":{"limit":"100","used":"\(Int(usedValue))","resetTime":"2026-06-17T20:00:00Z"},"window":{"duration":300,"timeUnit":"TIME_UNIT_MINUTE"}}]}
+            """
+            return MockURLProtocol.jsonResponse(url: req.url!, json: json)
+        }
+
+        let service = NetworkingService(keychain: mockKeychain, httpClient: client)
+
+        // 第一次抓取：used=60
+        usedValue = 60
+        let r1 = await service.fetchAll([.kimi])
+        let q1 = try XCTUnwrap(r1[.kimi]).get()
+        let w1 = try XCTUnwrap(q1.primaryWindow)
+        XCTAssertEqual(w1.used, 60, accuracy: 0.001)
+
+        // 第二次抓取：used=40（倒退）
+        usedValue = 40
+        let r2 = await service.fetchAll([.kimi])
+        let q2 = try XCTUnwrap(r2[.kimi]).get()
+        let w2 = try XCTUnwrap(q2.primaryWindow)
+        XCTAssertEqual(w2.used, 60, accuracy: 0.001,
+                       "同窗口内 used 不应倒退，平滑保留上一次的 60")
+    }
+
+    func testSmoothing_allowsIncrease() async throws {
+        try mockKeychain.save("k1", for: .kimi)
+
+        // v1.0.1 mock：Kimi 真实响应格式
+        var usedValue: Double = 30
+        MockURLProtocol.handler = { req in
+            let json = """
+            {"limits":[{"detail":{"limit":"100","used":"\(Int(usedValue))","resetTime":"2026-06-17T20:00:00Z"},"window":{"duration":300,"timeUnit":"TIME_UNIT_MINUTE"}}]}
+            """
+            return MockURLProtocol.jsonResponse(url: req.url!, json: json)
+        }
+
+        let service = NetworkingService(keychain: mockKeychain, httpClient: client)
+
+        // 第一次 used=30
+        usedValue = 30
+        let r1 = await service.fetchAll([.kimi])
+        let w1 = try XCTUnwrap(try XCTUnwrap(r1[.kimi]).get().primaryWindow)
+        XCTAssertEqual(w1.used, 30, accuracy: 0.001)
+
+        // 第二次 used=70（增加，正常通过）
+        usedValue = 70
+        let r2 = await service.fetchAll([.kimi])
+        let w2 = try XCTUnwrap(try XCTUnwrap(r2[.kimi]).get().primaryWindow)
+        XCTAssertEqual(w2.used, 70, accuracy: 0.001,
+                       "同窗口内 used 增加是正常消耗，应通过")
+    }
+}
+
+// MARK: - XCTAssertThrowsError helper removed
+// 标准 XCTAssertThrowsError 已能处理 Result<>.get() 抛错

@@ -1,0 +1,86 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'        # 触发条件：push tag v1.0.2, v1.1.0 等
+  workflow_dispatch:   # 允许手动从 GitHub UI 触发
+
+permissions:
+  contents: write     # 创建 Release 需要写权限
+
+jobs:
+  release:
+    name: Build + Publish Release
+    runs-on: macos-14
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Extract version from tag
+        id: version
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+          echo "TAG=$GITHUB_REF_NAME" >> $GITHUB_OUTPUT
+
+      - name: Build (release)
+        run: swift build -c release
+
+      - name: Test
+        run: swift test
+
+      - name: Package .app
+        run: |
+          mkdir -p build/QuotaMonitor.app/Contents/MacOS
+          cp .build/release/QuotaMonitor build/QuotaMonitor.app/Contents/MacOS/QuotaMonitor
+          chmod +x build/QuotaMonitor.app/Contents/MacOS/QuotaMonitor
+
+      - name: Code sign (ad-hoc)
+        run: codesign --force --deep --sign - build/QuotaMonitor.app
+
+      - name: Create .dmg
+        run: |
+          brew install create-dmg
+          create-dmg \
+            --volname "QuotaMonitor" \
+            --window-size 600 400 \
+            --icon-size 100 \
+            --icon "QuotaMonitor.app" 175 190 \
+            --app-drop-link 425 190 \
+            --no-internet-enable \
+            "build/QuotaMonitor-${{ steps.version.outputs.VERSION }}.dmg" \
+            "build/QuotaMonitor.app"
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: QuotaMonitor-${{ steps.version.outputs.VERSION }}-macos
+          path: |
+            build/QuotaMonitor-${{ steps.version.outputs.VERSION }}.dmg
+            .build/release/QuotaMonitor
+          retention-days: 30
+
+      - name: Create GitHub Release (only on tag push)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "QuotaMonitor ${{ steps.version.outputs.VERSION }}"
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          files: |
+            build/QuotaMonitor-${{ steps.version.outputs.VERSION }}.dmg
+          body: |
+            ## 安装方式
+
+            1. 下载下方的 `QuotaMonitor-${{ steps.version.outputs.VERSION }}.dmg`
+            2. 双击挂载 dmg，把 QuotaMonitor.app 拖入 Applications 文件夹
+            3. 启动后填写 API Key（设置 → 平台配置）
+            4. 首次打开如遇拦截，请"右键 → 打开 → 仍要打开"（macOS 安全策略，只这一次）
+
+            ## 更新内容
+
+            见 [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md)

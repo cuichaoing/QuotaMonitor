@@ -3,7 +3,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Platform: macOS 13+](https://img.shields.io/badge/platform-macOS%2013%2B-lightgrey.svg)](#系统要求)
 [![Swift: 5.9+](https://img.shields.io/badge/Swift-5.9%2B-orange.svg)](https://swift.org)
-[![Tests: 105/105](https://img.shields.io/badge/tests-105%2F105%20passing-brightgreen.svg)](#单元测试)
+[![Tests: 110/110](https://img.shields.io/badge/tests-110%2F110%20passing-brightgreen.svg)](#单元测试)
 
 macOS 状态栏原生应用，实时监控 Kimi Code / MiniMax / 智谱 GLM 三大 AI 平台的 5 小时滚动配额百分比、剩余量与重置倒计时。
 
@@ -176,7 +176,7 @@ QuotaMonitor/
 swift test
 ```
 
-**当前：105 个测试用例，全部通过，~0.5s**
+**当前：110 个测试用例，全部通过，~0.5s**
 
 | 测试文件 | 用例数 | 验证目标 |
 |----------|--------|----------|
@@ -193,7 +193,8 @@ swift test
 | SettingsStoreTests | 18 | Keychain + UserDefaults 持久化 |
 | AlertStateMachineTests | 12 | 3 级阈值 + 5h 去重 |
 | BarkClientTests | 4 | URL 构造 + 编码 + 错误 |
-| **合计** | **105** | |
+| LoginItemManagerTests | 5 | SMAppService 封装 + 开机自启持久化 |
+| **合计** | **110** | |
 
 ---
 

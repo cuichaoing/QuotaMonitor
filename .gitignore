@@ -67,3 +67,7 @@ __pycache__/
 .pytest_cache/
 .venv/
 venv/
+
+# Claude Code 本地工具配置（不是项目代码）
+CLAUDE.md
+.claude/

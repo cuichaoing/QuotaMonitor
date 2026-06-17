@@ -8,6 +8,7 @@
 
 import SwiftUI
 import LocalAuthentication
+import ServiceManagement
 
 public struct SettingsView: View {
     @ObservedObject var settings: SettingsStore
@@ -35,6 +36,7 @@ public struct SettingsView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: Spacing.lg) {
                     providersSection
+                    launchAtLoginSection
                     thresholdSection
                     barkSection
                     advancedSection
@@ -72,6 +74,12 @@ public struct SettingsView: View {
                 ProviderKeyRow(kind: kind, settings: settings)
             }
         }
+    }
+
+    // MARK: - LaunchAtLogin
+
+    private var launchAtLoginSection: some View {
+        LaunchAtLoginSection(settings: settings)
     }
 
     // MARK: - Thresholds
@@ -410,6 +418,87 @@ private struct ThresholdSlider: View {
             // 非法输入：恢复成 current value
             textValue = "\(Int(value))"
         }
+    }
+}
+
+// MARK: - LaunchAtLoginSection
+
+private struct LaunchAtLoginSection: View {
+    @ObservedObject var settings: SettingsStore
+    @State private var serviceStatus: SMAppService.Status = LoginItemManager.shared.status
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Spacing.sm) {
+            Text("启动")
+                .font(.headline)
+
+            Toggle(isOn: Binding(
+                get: { settings.launchAtLogin },
+                set: { newValue in
+                    settings.launchAtLogin = newValue
+                    Task { @MainActor in
+                        await syncLaunchAtLogin(enabled: newValue)
+                    }
+                }
+            )) {
+                Text("登录时自动启动 QuotaMonitor")
+            }
+            .toggleStyle(.checkbox)
+
+            HStack(spacing: Spacing.xs) {
+                Text(statusText)
+                    .font(.caption)
+                    .foregroundColor(statusColor)
+
+                Spacer()
+
+                if serviceStatus == .requiresApproval {
+                    Button("打开系统设置") {
+                        LoginItemManager.shared.openSystemSettings()
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                }
+            }
+        }
+    }
+
+    private var statusText: String {
+        switch serviceStatus {
+        case .enabled:
+            return "已启用"
+        case .requiresApproval:
+            return "需要在系统设置 → 登录项中允许"
+        case .notRegistered:
+            return "未启用"
+        case .notFound:
+            return "状态异常"
+        @unknown default:
+            return "未知状态"
+        }
+    }
+
+    private var statusColor: Color {
+        switch serviceStatus {
+        case .enabled: return .green
+        case .requiresApproval: return .orange
+        case .notRegistered: return .secondary
+        case .notFound: return .red
+        @unknown default: return .secondary
+        }
+    }
+
+    private func syncLaunchAtLogin(enabled: Bool) async {
+        do {
+            if enabled {
+                try LoginItemManager.shared.register()
+            } else {
+                try LoginItemManager.shared.unregister()
+            }
+        } catch {
+            // 注册失败时保持静默，UI 会显示实际状态
+        }
+        serviceStatus = LoginItemManager.shared.status
     }
 }
 

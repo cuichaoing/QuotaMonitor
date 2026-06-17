@@ -196,7 +196,7 @@ swift test
 - [`USER_GUIDE.md`](USER_GUIDE.md) — 用户使用指南
 - [`CONTRIBUTING.md`](CONTRIBUTING.md) — 贡献指南
 - [`SECURITY.md`](SECURITY.md) — 安全漏洞报告流程
-- [`docs/HANDOFF_v1.0.2_2026-06-17.md`](docs/HANDOFF_v1.0.2_2026-06-17.md) — 完整业务上下文 + 关键技术陷阱
+- [`docs/HANDOFF_v1.0.2_github_open_source_2026-06-17.md`](docs/HANDOFF_v1.0.2_github_open_source_2026-06-17.md) — 完整业务上下文 + 关键技术陷阱
 - [`docs/legacy/DECISIONS.md`](docs/legacy/DECISIONS.md) — 1.x QuotaCat → 2.0 QuotaMonitor 决策追溯
 
 ---

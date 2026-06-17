@@ -4,6 +4,27 @@ QuotaMonitor 版本变更历史。
 
 ---
 
+## [1.0.4] - 2026-06-17
+
+**新增开机自动启动功能**
+
+### 新增
+
+- **开机自启**：设置面板新增"登录时自动启动 QuotaMonitor"选项，使用 Apple 主推的 SMAppService API
+- **系统设置跳转**：当 macOS 需要授权时，一键打开"系统设置 → 登录项"
+
+### 变更
+
+- 最低系统要求从 macOS 12 提升至 macOS 13（SMAppService 需要）
+
+### 技术细节
+
+- 新增 `LoginItemManager` 封装 SMAppService 注册/注销/状态查询
+- `SettingsStore` 新增 `launchAtLogin` 持久化字段
+- `AppDelegate` 启动时同步 SMAppService 与设置状态
+
+---
+
 ## [1.0.3] - 2026-06-17
 
 **修复 GitHub Release 的 .dmg 安装包无法启动的问题** — 根因：CI 打包步骤未复制 `Info.plist`，导致 .app bundle 结构不完整。

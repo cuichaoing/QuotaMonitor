@@ -56,6 +56,11 @@ public final class SettingsStore: ObservableObject {
         didSet { defaults.set(dangerThreshold, forKey: Keys.dangerThreshold) }
     }
 
+    /// 开机自动启动
+    @Published public var launchAtLogin: Bool {
+        didSet { defaults.set(launchAtLogin, forKey: Keys.launchAtLogin) }
+    }
+
     /// 刷新频率覆盖（nil = 用 ActivityLevel 默认值）
     @Published public var activeInterval: Double {
         didSet { defaults.set(activeInterval, forKey: Keys.activeInterval) }
@@ -87,6 +92,8 @@ public final class SettingsStore: ObservableObject {
         self.warningThreshold = defaults.object(forKey: Keys.warningThreshold) as? Double ?? 75
         self.criticalThreshold = defaults.object(forKey: Keys.criticalThreshold) as? Double ?? 90
         self.dangerThreshold = defaults.object(forKey: Keys.dangerThreshold) as? Double ?? 99
+
+        self.launchAtLogin = defaults.object(forKey: Keys.launchAtLogin) as? Bool ?? false
 
         self.activeInterval = defaults.object(forKey: Keys.activeInterval) as? Double ?? 30
         self.normalInterval = defaults.object(forKey: Keys.normalInterval) as? Double ?? 60
@@ -207,5 +214,6 @@ public final class SettingsStore: ObservableObject {
         static let barkEnabled = "qm.barkEnabled"
         static let barkServer = "qm.barkServer"
         static let barkDeviceKey = "qm.barkDeviceKey"
+        static let launchAtLogin = "qm.launchAtLogin"
     }
 }

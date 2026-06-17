@@ -20,3 +20,22 @@ final class LoginItemManagerTests: XCTestCase {
         XCTAssertTrue(url?.absoluteString.hasPrefix("x-apple.systempreferences:") ?? false)
     }
 }
+
+extension LoginItemManagerTests {
+    func testSettingsStoreLaunchAtLoginDefaultsToFalse() {
+        let defaults = UserDefaults(suiteName: #function)!
+        defaults.removePersistentDomain(forName: #function)
+        let store = SettingsStore(defaults: defaults)
+        XCTAssertFalse(store.launchAtLogin)
+    }
+
+    func testSettingsStoreLaunchAtLoginPersistence() {
+        let defaults = UserDefaults(suiteName: #function)!
+        defaults.removePersistentDomain(forName: #function)
+        let store = SettingsStore(defaults: defaults)
+        store.launchAtLogin = true
+
+        let secondStore = SettingsStore(defaults: defaults)
+        XCTAssertTrue(secondStore.launchAtLogin)
+    }
+}

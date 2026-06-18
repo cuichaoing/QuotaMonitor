@@ -4,6 +4,22 @@ QuotaMonitor 版本变更历史。
 
 ---
 
+## [1.0.8] - 2026-06-18
+
+**新功能：诊断日志导出** — 一键"拍照式"导出当前配额状态镜像 + 近期刷新轨迹为脱敏 JSON（剪贴板 + 文件双写），供 AI 快速诊断。详见 `docs/superpowers/specs/2026-06-18-diagnostics-export-design.md`。
+
+### 新增
+- 右键菜单 / Popup 加"导出诊断日志"：写 `~/Downloads/QuotaMonitor-diag-<ts>.json` + 复制到剪贴板；右键还在 Finder 定位文件
+- `DiagHistoryStore`：ring buffer 存最近 20 条刷新轨迹，导出时按 5 分钟窗口过滤
+- `DiagnosticsExporter`：纯逻辑导出脱敏 JSON（各平台提炼关键字段如 GLM selected/availableLimits，非 raw dump；递归正则清除 Authorization/Bearer/Key 作安全网）
+- `QuotaError.networkUnreachable` 加 `underlying`，错误信息能说清"为什么不可达"（落地 incident report A-2）
+
+### 测试
+- 新增 `DiagnosticsExporterTests`（6）、`DiagHistoryStoreTests`（4）；补 `QuotaErrorTests` underlying（2）
+- `swift test` → 130/130 通过
+
+---
+
 ## [1.0.7] - 2026-06-18
 
 **Bug 修复：网络错误错误归因 + 状态栏忽略 error 状态** — 修复"MiniMax/GLM 显示 Kimi Code 网络不可达"与"状态栏数字与 Popup 离线不一致"。详见 `docs/incident-reports/2026-06-18-error-misattribution-statusbar-mismatch.md`。

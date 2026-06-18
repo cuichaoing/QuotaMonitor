@@ -17,7 +17,7 @@ final class QuotaErrorTests: XCTestCase {
     }
 
     func testNetworkUnreachable_isRetryable() {
-        XCTAssertTrue(QuotaError.networkUnreachable(.kimi).isRetryable)
+        XCTAssertTrue(QuotaError.networkUnreachable(.kimi, underlying: nil).isRetryable)
     }
 
     func testServerError5xx_isRetryable() {
@@ -58,7 +58,7 @@ final class QuotaErrorTests: XCTestCase {
     }
 
     func testNetworkErrors_notUserActionable() {
-        XCTAssertFalse(QuotaError.networkUnreachable(.kimi).isUserActionable)
+        XCTAssertFalse(QuotaError.networkUnreachable(.kimi, underlying: nil).isUserActionable)
         XCTAssertFalse(QuotaError.rateLimited(.kimi, retryAfter: nil).isUserActionable)
     }
 
@@ -67,5 +67,17 @@ final class QuotaErrorTests: XCTestCase {
     func testErrorDescription_containsProviderName() {
         let err = QuotaError.keyMissing(.kimi)
         XCTAssertTrue(err.errorDescription?.contains("Kimi") == true)
+    }
+
+    // MARK: - networkUnreachable underlying（BUG-2026-06-18-01 A-2）
+
+    func testNetworkUnreachable_errorDescription_includesUnderlying() {
+        let err = QuotaError.networkUnreachable(.glm, underlying: "URLError: timedOut")
+        XCTAssertEqual(err.errorDescription, "Zhipu GLM 网络不可达（URLError: timedOut）")
+    }
+
+    func testNetworkUnreachable_withoutUnderlying_keepsPlainMessage() {
+        let err = QuotaError.networkUnreachable(.kimi, underlying: nil)
+        XCTAssertEqual(err.errorDescription, "Kimi Code 网络不可达")
     }
 }

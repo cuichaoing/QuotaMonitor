@@ -14,7 +14,7 @@ public enum QuotaError: LocalizedError, Sendable {
     case rateLimited(ProviderKind, retryAfter: TimeInterval?)
     case serverError(ProviderKind, statusCode: Int, message: String?)
     case decodingFailed(ProviderKind, underlying: String)
-    case networkUnreachable(ProviderKind)
+    case networkUnreachable(ProviderKind, underlying: String? = nil)
     case mockDisabled(ProviderKind)
     case cancelled
     case unknown(ProviderKind, underlying: String)
@@ -34,7 +34,10 @@ public enum QuotaError: LocalizedError, Sendable {
             return "\(p.displayName) 服务端错误 \(code): \(msg ?? "")"
         case .decodingFailed(let p, let u):
             return "\(p.displayName) 响应解析失败：\(u)"
-        case .networkUnreachable(let p):
+        case .networkUnreachable(let p, let u):
+            if let u {
+                return "\(p.displayName) 网络不可达（\(u)）"
+            }
             return "\(p.displayName) 网络不可达"
         case .mockDisabled(let p):
             return "\(p.displayName) mock 未启用"

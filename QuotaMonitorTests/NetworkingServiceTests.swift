@@ -190,7 +190,7 @@ final class NetworkingServiceTests: XCTestCase {
         guard case .failure(let minimaxErr) = minimaxResult else {
             XCTFail("MiniMax 在网络错误时应失败"); return
         }
-        guard case .networkUnreachable(let minimaxKind) = minimaxErr else {
+        guard case .networkUnreachable(let minimaxKind, _) = minimaxErr else {
             XCTFail("MiniMax 网络错误应为 networkUnreachable，实际：\(minimaxErr)"); return
         }
         XCTAssertEqual(minimaxKind, .minimax,
@@ -201,7 +201,7 @@ final class NetworkingServiceTests: XCTestCase {
         guard case .failure(let glmErr) = glmResult else {
             XCTFail("GLM 在网络错误时应失败"); return
         }
-        guard case .networkUnreachable(let glmKind) = glmErr else {
+        guard case .networkUnreachable(let glmKind, _) = glmErr else {
             XCTFail("GLM 网络错误应为 networkUnreachable，实际：\(glmErr)"); return
         }
         XCTAssertEqual(glmKind, .glm,

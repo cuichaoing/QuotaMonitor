@@ -4,6 +4,22 @@ QuotaMonitor 版本变更历史。
 
 ---
 
+## [1.0.5] - 2026-06-18
+
+**Bug 修复与 UI 完善**
+
+### 修复
+
+- **保存 Key 后 popup 仍显示"无 KEY"**：`ProviderKeyRow.save()` / `delete()` 在 Keychain 写入/删除成功后立即触发 `AppState.refresh()`，状态栏与 popup 实时同步
+- **查看 Key 时闪退**：`TextField` / `SecureField` 切换时加 `.id(showKey)`，强制 SwiftUI 重新创建视图，规避 macOS 在 secure/plain 文本框间切换的已知崩溃
+
+### 新增
+
+- **版本号显示**：popup 底部显示当前应用版本号（读取 `Info.plist` 的 `CFBundleShortVersionString`）
+- **状态栏图标**：状态栏按钮左侧增加 SF Symbol 模板图标，解决 DMG 安装版"图标空白"问题
+
+---
+
 ## [1.0.4] - 2026-06-17
 
 **新增开机自动启动功能**

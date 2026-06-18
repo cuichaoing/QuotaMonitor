@@ -40,9 +40,16 @@ public final class MenuBarController: NSObject {
 
     private func setupStatusItem() {
         guard let button = statusItem.button else { return }
-        // 故意不设 image：K/M/G + 数字已经能让用户自我标识这个 app，
-        // 图标（之前是 chart.bar.fill）只占空间不携带数据，反而会被误认为手机信号。
-        // 文字本身可点击，配合 tooltip 足够作为状态栏入口。
+        // 状态栏图标：使用 SF Symbol 作为模板图，保持与系统状态栏一致的单色风格。
+        // 左侧图标提供应用识别入口，右侧 K/M/G 数字保留数据密度。
+        if let icon = NSImage(
+            systemSymbolName: "chart.bar.fill",
+            accessibilityDescription: "QuotaMonitor"
+        ) {
+            icon.isTemplate = true
+            button.image = icon
+            button.imagePosition = .imageLeft
+        }
         button.toolTip = "QuotaMonitor - 点击查看"
         button.target = self
         button.action = #selector(handleClick(_:))

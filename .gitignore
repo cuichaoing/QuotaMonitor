@@ -78,3 +78,8 @@ docs/handoff_*.md
 
 # 本地监控脚本（避免 Co-Authored-By 污染 Contributors）
 scripts/monitor.sh
+
+# 本地一次性报告生成脚本与中间产物
+deliverables/
+scripts/pdf_generate_*.py
+scripts/mermaid-config.json

@@ -250,6 +250,7 @@ private struct ProviderKeyRow: View {
                         SecureField("sk-...", text: $keyInput)
                     }
                 }
+                .id(showKey)
                 .textFieldStyle(.roundedBorder)
                 .disabled(!settings.enabledProviders.contains(kind))
 
@@ -303,6 +304,7 @@ private struct ProviderKeyRow: View {
             try settings.saveKey(keyInput, for: kind)
             keyInput = ""
             error = nil
+            Task { await AppState.shared.refresh() }
         } catch {
             self.error = "保存失败: \(error.localizedDescription)"
         }
@@ -312,6 +314,7 @@ private struct ProviderKeyRow: View {
         do {
             try settings.deleteKey(for: kind)
             error = nil
+            Task { await AppState.shared.refresh() }
         } catch {
             self.error = "删除失败: \(error.localizedDescription)"
         }

@@ -8,6 +8,7 @@
 
 import Foundation
 import SwiftUI
+import AppKit
 import os
 
 @MainActor
@@ -23,6 +24,9 @@ public final class AppState: ObservableObject {
     private lazy var notifications = NotificationManager.shared
     private let bark = BarkClient()
     private let logger = Logger(subsystem: "app.quotamonitor", category: "AppState")
+
+    /// 诊断轨迹 ring buffer（refresh 时追加，exportDiagnostics 时读取）
+    public let diagHistory = DiagHistoryStore()
 
     public init(settings: SettingsStore = .shared) {
         self.settings = settings
@@ -77,6 +81,17 @@ public final class AppState: ObservableObject {
 
         store.update(snapshots: newSnapshots, errors: newErrors)
 
+        // 写诊断轨迹（精简：每平台 ok(pct) / err(type)）
+        var outcomes: [ProviderKind: DiagProviderOutcome] = [:]
+        for kind in target {
+            if let q = newSnapshots[kind], let pct = q.primaryUsedPercent {
+                outcomes[kind] = .ok(usedPercent: pct)
+            } else if newErrors[kind] != nil {
+                outcomes[kind] = .error(type: Self.diagErrorType(newErrors[kind]!))
+            }
+        }
+        diagHistory.append(DiagEntry(at: Date(), results: outcomes))
+
         // 跑告警状态机
         let events = alertStateMachine.evaluate(
             snapshots: newSnapshots,
@@ -109,5 +124,74 @@ public final class AppState: ObservableObject {
         }
 
         logger.info("refresh done: \(newSnapshots.count) ok, \(newErrors.count) failed, alerts=\(events.count)")
+    }
+
+    // MARK: - Diagnostics Export
+
+    /// 一键导出当前诊断快照：JSON 写文件 + 复制剪贴板（供 AI 诊断）。
+    public func exportDiagnostics() -> DiagExportResult {
+        let now = Date()
+        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0"
+        let config = DiagConfig(
+            enabled: settings.enabledKinds(),
+            keyConfigured: Dictionary(uniqueKeysWithValues:
+                ProviderKind.allCases.map { ($0, settings.keyState(for: $0) == .configured) }),
+            warningThreshold: settings.warningThreshold,
+            criticalThreshold: settings.criticalThreshold,
+            dangerThreshold: settings.dangerThreshold
+        )
+        do {
+            let data = try DiagnosticsExporter.export(
+                snapshots: store.snapshots,
+                errors: store.errors,
+                history: diagHistory.recent(since: now.addingTimeInterval(-300)),
+                config: config,
+                appVersion: version,
+                now: now)
+
+            let df = DateFormatter()
+            df.dateFormat = "yyyyMMdd-HHmmss"
+            let url = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask)[0]
+                .appendingPathComponent("QuotaMonitor-diag-\(df.string(from: now)).json")
+            try data.write(to: url, options: .atomic)
+
+            let pb = NSPasteboard.general
+            pb.clearContents()
+            pb.setString(String(data: data, encoding: .utf8) ?? "", forType: .string)
+
+            logger.info("diag exported to \(url.path, privacy: .public)")
+            return DiagExportResult(url: url, copiedToPasteboard: true, error: nil)
+        } catch {
+            logger.error("diag export failed: \(error.localizedDescription, privacy: .public)")
+            return DiagExportResult(url: nil, copiedToPasteboard: false, error: error.localizedDescription)
+        }
+    }
+
+    /// QuotaError → 诊断轨迹用的类型字符串
+    private static func diagErrorType(_ err: QuotaError) -> String {
+        switch err {
+        case .networkUnreachable: return "networkUnreachable"
+        case .keyMissing: return "keyMissing"
+        case .keyInvalid: return "keyInvalid"
+        case .rateLimited: return "rateLimited"
+        case .serverError: return "serverError"
+        case .decodingFailed: return "decodingFailed"
+        case .unknown: return "unknown"
+        case .mockDisabled: return "mockDisabled"
+        case .cancelled: return "cancelled"
+        }
+    }
+}
+
+/// 诊断导出结果（供 UI 提示）
+public struct DiagExportResult: Sendable {
+    public let url: URL?
+    public let copiedToPasteboard: Bool
+    public let error: String?
+
+    public init(url: URL?, copiedToPasteboard: Bool, error: String?) {
+        self.url = url
+        self.copiedToPasteboard = copiedToPasteboard
+        self.error = error
     }
 }

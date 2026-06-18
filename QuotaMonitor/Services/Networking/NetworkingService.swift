@@ -75,6 +75,12 @@ public actor NetworkingService {
         } catch let err as QuotaError {
             logger.error("[\(kind.rawValue, privacy: .public)] fetch failed: \(err.localizedDescription, privacy: .public)")
             return .failure(err)
+        } catch _ as URLError {
+            // 传输层失败（超时 / DNS / TLS / 断网等），归因到当前 provider。
+            // [BUG-2026-06-18-01] 此前 HTTPClient 把 URLError 硬编码成 networkUnreachable(.kimi)，
+            // 导致 MiniMax / GLM 的网络错误挂到 Kimi 名下。
+            logger.error("[\(kind.rawValue, privacy: .public)] transport error -> networkUnreachable")
+            return .failure(.networkUnreachable(kind))
         } catch {
             logger.error("[\(kind.rawValue, privacy: .public)] unknown error: \(error.localizedDescription, privacy: .public)")
             return .failure(.unknown(kind, underlying: error.localizedDescription))

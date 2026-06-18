@@ -10,7 +10,7 @@ import XCTest
 @testable import QuotaMonitor
 
 final class MockURLProtocol: URLProtocol {
-    typealias Handler = (URLRequest) async -> (HTTPURLResponse, Data?)
+    typealias Handler = (URLRequest) async throws -> (HTTPURLResponse, Data?)
 
     /// 当前测试期望的响应处理（async，支持 Task.sleep 模拟网络延迟）
     static var handler: Handler?
@@ -33,12 +33,17 @@ final class MockURLProtocol: URLProtocol {
         // 用 Task.detached 避免继承调用方 actor（URLSession.data 的 actor），
         // 保证 3 个并发请求的 sleep 能真正并行（而非串行）。
         Task.detached { [self] in
-            let (response, data) = await handler(self.request)
-            self.client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
-            if let data = data {
-                self.client?.urlProtocol(self, didLoad: data)
+            do {
+                let (response, data) = try await handler(self.request)
+                self.client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+                if let data = data {
+                    self.client?.urlProtocol(self, didLoad: data)
+                }
+                self.client?.urlProtocolDidFinishLoading(self)
+            } catch {
+                // handler 抛错（如 URLError）→ 模拟传输层失败，交给 HTTPClient 归因
+                self.client?.urlProtocol(self, didFailWithError: error)
             }
-            self.client?.urlProtocolDidFinishLoading(self)
         }
     }
 

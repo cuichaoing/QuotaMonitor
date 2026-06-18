@@ -75,9 +75,10 @@ public final class HTTPClient: @unchecked Sendable {
             )
         } catch let urlError as URLError where urlError.code == .cancelled {
             throw QuotaError.cancelled
-        } catch _ as URLError {
-            // 透传 network 错误，由调用方决定归因到哪个 provider
-            throw QuotaError.networkUnreachable(.kimi)
         }
+        // [!] 不在此处归因：HTTPClient 无状态、不感知当前请求属于哪个 provider。
+        // URLError 原样冒泡，由 NetworkingService.fetchOne（持有当前 kind）归因为
+        // networkUnreachable(kind)。修复 BUG-2026-06-18-01：此前硬编码 .kimi，
+        // 导致 MiniMax / GLM 的网络错误被错误归到 Kimi（UI 显示 "Kimi Code 网络不可达"）。
     }
 }

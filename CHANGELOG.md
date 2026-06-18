@@ -4,6 +4,30 @@ QuotaMonitor 版本变更历史。
 
 ---
 
+## [1.0.7] - 2026-06-18
+
+**Bug 修复：网络错误错误归因 + 状态栏忽略 error 状态** — 修复"MiniMax/GLM 显示 Kimi Code 网络不可达"与"状态栏数字与 Popup 离线不一致"。详见 `docs/incident-reports/2026-06-18-error-misattribution-statusbar-mismatch.md`。
+
+### 修复
+
+- **网络错误归因错误（根因 A，总根因）**：`HTTPClient.swift` 此前把所有 `URLError` 硬编码成 `networkUnreachable(.kimi)`，而 HTTPClient 无状态、不感知当前请求属于哪个 provider。后果：MiniMax / GLM 一遇网络异常，错误对象内部 provider 被钉死成 Kimi，UI 显示 "Kimi Code 网络不可达" 挂在错误的卡片下（用户误以为"状态串台"）。改为 HTTPClient 不再归因、`URLError` 原样冒泡，由 `NetworkingService.fetchOne`（持有当前 `kind`）归因为 `networkUnreachable(kind)`
+- **状态栏忽略 error 状态（根因 B）**：`MenuBarController.refreshStatusItemTitle` 此前只读 `snapshots`、完全不读 `errors`，与 Popup 的 error 优先渲染不对称——某平台失败时状态栏仍显示旧百分比或 `--`，而 Popup 显示"离线"红标。新增纯值类型 `MenuBarSegment`（error > 成功快照 > 占位 三级决策），状态栏失败时显示 `!` 红色，与 Popup 对齐
+
+### 测试
+
+- 新增 `NetworkingServiceTests.testNetworkError_attributedToCallingProvider_notHardcodedKimi`：验证 MiniMax / GLM 网络错误归因到各自 kind（修复前被钉死成 kimi）
+- 新增 `MenuBarControllerTests`（5 用例）：`MenuBarSegment.resolve` 的 error 优先、成功值、占位、取整一致性
+- `MockURLProtocol.handler` 扩展为可 `throw`（支持模拟 `URLError`）
+- `swift test` → 118/118 通过（本轮新增 6 个用例）
+
+### 已知后续（按既定顺序，本轮未做）
+
+- **根因 C**（GLM `G 33` vs 网页 2% vs "离线" 时序）：需运行时诊断数据，待"诊断日志导出"功能落地后取证再修，禁止盲改
+- **诊断日志导出功能**（右键/下拉菜单加"导出诊断日志"）：独立 feature，走 brainstorming
+- **文档元信息滞后**：README 测试数（实际 118）、CLAUDE.md 版本/测试数待统一更新
+
+---
+
 ## [1.0.6] - 2026-06-18
 
 **Bug 修复：状态栏与 Popup 百分比显示不一致**

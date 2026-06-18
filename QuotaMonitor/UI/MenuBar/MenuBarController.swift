@@ -10,6 +10,27 @@ import AppKit
 import SwiftUI
 import Combine
 
+/// 状态栏单个平台的显示决策（纯逻辑，无 AppKit / actor 依赖，可单测）。
+/// 修复 BUG-2026-06-18-01 根因 B：状态栏此前只读 snapshots、忽略 errors，
+/// 导致某平台失败时状态栏仍显示旧百分比或 "--"，与 Popup 的 "离线" 红标不一致。
+public enum MenuBarSegment: Equatable {
+    /// 本轮抓取失败 → 状态栏显示 "!"
+    case failed
+    /// 成功 → 显示百分比（displayPercent 四舍五入；rawPercent 原始值用于配色阈值判定）
+    case value(displayPercent: Int, rawPercent: Double)
+    /// 无数据 → 显示 "--"
+    case placeholder
+
+    /// 决策优先级：error > 成功快照 > 占位
+    public static func resolve(snapshot: ProviderQuota?, error: QuotaError?) -> MenuBarSegment {
+        if error != nil { return .failed }
+        if let snap = snapshot, let raw = snap.primaryUsedPercent {
+            return .value(displayPercent: snap.displayPercent ?? 0, rawPercent: raw)
+        }
+        return .placeholder
+    }
+}
+
 @MainActor
 public final class MenuBarController: NSObject {
     private let statusItem: NSStatusItem
@@ -191,15 +212,20 @@ public final class MenuBarController: NSObject {
                 string: kind.shortName,
                 attributes: [.foregroundColor: labelColor, .font: monoBoldFont]
             ))
-            // 数字或 "--"（语义色，等宽字重）
+            // 数字 / "!" / "--"（语义色，等宽字重）
+            // [BUG-2026-06-18-01 根因 B] 用 MenuBarSegment.resolve 统一决策：
+            // error 优先 → "!" 红色（与 Popup "离线" 红标对齐），不再只看 snapshot
+            //   而显示陈旧的旧百分比，杜绝状态栏与 Popup 的成功/失败状态分裂。
             let numberText: String
             let numberColor: NSColor
-            if let snap = snapshots[kind], let raw = snap.primaryUsedPercent {
-                // 数字用 displayPercent（四舍五入），与 popup 统一，杜绝显示分裂；
-                // 颜色阈值仍用原始 Double 百分比判定，避免边界颜色错位。
-                numberText = " \(snap.displayPercent ?? 0)"
+            switch MenuBarSegment.resolve(snapshot: snapshots[kind], error: appState.store.errors[kind]) {
+            case .failed:
+                numberText = " !"
+                numberColor = .systemRed
+            case .value(let display, let raw):
+                numberText = " \(display)"
                 numberColor = Self.nsColor(for: raw, settings: appState.settings)
-            } else {
+            case .placeholder:
                 numberText = " --"
                 numberColor = NSColor.tertiaryLabelColor
             }

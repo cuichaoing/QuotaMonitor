@@ -168,6 +168,45 @@ final class NetworkingServiceTests: XCTestCase {
         XCTAssertEqual(w2.used, 70, accuracy: 0.001,
                        "同窗口内 used 增加是正常消耗，应通过")
     }
+
+    // MARK: - 网络错误归因（BUG-2026-06-18-01 根因 A）
+    // 修复前 HTTPClient 把所有 URLError 硬编码成 networkUnreachable(.kimi)，
+    // 导致 MiniMax / GLM 的网络错误被错误归因到 Kimi（UI 显示 "Kimi Code 网络不可达"）。
+
+    func testNetworkError_attributedToCallingProvider_notHardcodedKimi() async throws {
+        try mockKeychain.save("m1", for: .minimax)
+        try mockKeychain.save("g1", for: .glm)
+
+        // 模拟传输层失败：所有请求都抛 URLError
+        MockURLProtocol.handler = { _ in
+            throw URLError(.notConnectedToInternet)
+        }
+
+        let service = NetworkingService(keychain: mockKeychain, httpClient: client)
+        let results = await service.fetchAll([.minimax, .glm])
+
+        // MiniMax 的网络错误必须归因到 .minimax（修复前会被钉死成 .kimi）
+        let minimaxResult = try XCTUnwrap(results[.minimax])
+        guard case .failure(let minimaxErr) = minimaxResult else {
+            XCTFail("MiniMax 在网络错误时应失败"); return
+        }
+        guard case .networkUnreachable(let minimaxKind) = minimaxErr else {
+            XCTFail("MiniMax 网络错误应为 networkUnreachable，实际：\(minimaxErr)"); return
+        }
+        XCTAssertEqual(minimaxKind, .minimax,
+                       "MiniMax 网络错误必须归因到 minimax，不应硬编码成 kimi")
+
+        // GLM 同理
+        let glmResult = try XCTUnwrap(results[.glm])
+        guard case .failure(let glmErr) = glmResult else {
+            XCTFail("GLM 在网络错误时应失败"); return
+        }
+        guard case .networkUnreachable(let glmKind) = glmErr else {
+            XCTFail("GLM 网络错误应为 networkUnreachable，实际：\(glmErr)"); return
+        }
+        XCTAssertEqual(glmKind, .glm,
+                       "GLM 网络错误必须归因到 glm，不应硬编码成 kimi")
+    }
 }
 
 // MARK: - XCTAssertThrowsError helper removed

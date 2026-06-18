@@ -113,6 +113,10 @@ codesign --force --deep --sign - build/QuotaMonitor.app
 osascript -e 'tell application "QuotaMonitor" to quit' 2>/dev/null; pkill -x QuotaMonitor 2>/dev/null
 
 # 覆盖安装 + 启动
+# [!] 必须先 rm：若 /Applications/QuotaMonitor.app 已存在，cp -R 会把源「嵌套」进去
+#     变成 /Applications/QuotaMonitor.app/QuotaMonitor.app，旧的 Info.plist 不被替换
+#     （v1.0.6 实测踩坑：版本号停在旧值）。先删再 cp。
+rm -rf /Applications/QuotaMonitor.app
 cp -R build/QuotaMonitor.app /Applications/QuotaMonitor.app
 open /Applications/QuotaMonitor.app
 ```

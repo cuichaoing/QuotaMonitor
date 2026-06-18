@@ -78,8 +78,12 @@ public final class MenuBarController: NSObject {
     }
 
     private func observeState() {
-        // 用 Combine 监听 QuotaStore 变化，触发状态栏文本刷新
-        appState.store.objectWillChange
+        // 用 Combine 监听 QuotaStore 变化，触发状态栏文本刷新。
+        // [关键 v1.0.6] 用 $snapshots 而不是 objectWillChange：
+        //   objectWillChange 在 @Published 的 willSet 触发，此时 snapshots 新值尚未写入，
+        //   导致状态栏读到上一周期的旧快照、与 popup 显示不一致（状态栏滞后一个刷新周期）。
+        //   $snapshots 在 didSet 后 send，读到的是当前快照。
+        appState.store.$snapshots
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
                 self?.refreshStatusItemTitle()
@@ -190,9 +194,11 @@ public final class MenuBarController: NSObject {
             // 数字或 "--"（语义色，等宽字重）
             let numberText: String
             let numberColor: NSColor
-            if let used = snapshots[kind]?.primaryUsedPercent {
-                numberText = " \(Int(used))"
-                numberColor = Self.nsColor(for: used, settings: appState.settings)
+            if let snap = snapshots[kind], let raw = snap.primaryUsedPercent {
+                // 数字用 displayPercent（四舍五入），与 popup 统一，杜绝显示分裂；
+                // 颜色阈值仍用原始 Double 百分比判定，避免边界颜色错位。
+                numberText = " \(snap.displayPercent ?? 0)"
+                numberColor = Self.nsColor(for: raw, settings: appState.settings)
             } else {
                 numberText = " --"
                 numberColor = NSColor.tertiaryLabelColor

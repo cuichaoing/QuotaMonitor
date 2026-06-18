@@ -28,10 +28,10 @@ public struct ProviderCardView: View {
                 Spacer()
                 if let error = error {
                     statusBadge(text: errorShortText(error), color: SemanticColors.error)
-                } else if let used = quota?.primaryUsedPercent {
-                    Text(String(format: "%.0f%%", used))
+                } else if let display = quota?.displayPercent, let raw = quota?.primaryUsedPercent {
+                    Text("\(display)%")
                         .font(Typography.heading)
-                        .foregroundColor(SemanticColors.color(for: used))
+                        .foregroundColor(SemanticColors.color(for: raw))
                 } else {
                     Text("--")
                         .font(Typography.heading)

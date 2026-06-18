@@ -52,4 +52,34 @@ final class ProviderQuotaTests: XCTestCase {
         XCTAssertNotEqual(qKimi.windowFingerprint, qGLM.windowFingerprint)
         XCTAssertNotEqual(qMiniMax.windowFingerprint, qGLM.windowFingerprint)
     }
+
+    // MARK: - displayPercent（v1.0.6：统一状态栏与 popup 的取整，杜绝显示分裂）
+
+    func testDisplayPercent_roundsHalfAwayFromZero() {
+        // 四舍五入边界（.5 向上，away from zero）。
+        // 这正是状态栏 Int()（截断）与 popup %.0f 行为不一致的高发区：
+        //   例如 used=1.6 截断得 1、四舍五入得 2；used=2.5 截断得 2、四舍五入得 3。
+        // displayPercent 作为状态栏与 popup 共用的显示值，必须用同一套四舍五入规则。
+        let cases: [(used: Double, expected: Int)] = [
+            (0.4, 0),
+            (0.5, 1),
+            (1.4, 1),
+            (1.6, 2),
+            (2.5, 3),
+            (59.6, 60),   // 阈值边界：59.6 应显示 60
+        ]
+        for c in cases {
+            let q = ProviderQuota(
+                provider: .minimax,
+                primaryWindow: QuotaWindow(total: 100, used: c.used, resetAt: Date(), displayName: "5h")
+            )
+            XCTAssertEqual(q.displayPercent, c.expected,
+                          "used=\(c.used) 应四舍五入为 \(c.expected)")
+        }
+    }
+
+    func testDisplayPercent_nilWhenNoWindow() {
+        let q = ProviderQuota(provider: .minimax, capturedAt: Date(), primaryWindow: nil)
+        XCTAssertNil(q.displayPercent, "无窗口时 displayPercent 应为 nil")
+    }
 }

@@ -4,6 +4,20 @@ QuotaMonitor 版本变更历史。
 
 ---
 
+## [1.0.6] - 2026-06-18
+
+**Bug 修复：状态栏与 Popup 百分比显示不一致**
+
+### 修复
+
+- **状态栏与 Popup 数字不同步**（实测：状态栏 MiniMax 显示 2、Popup 显示 1%）。双层根因，缺一不可：
+  - **时序滞后（主因）**：`MenuBarController` 监听 `store.objectWillChange`，而 `snapshots` 是 `@Published`——`objectWillChange` 在 `willSet` 触发、新值尚未写入，导致状态栏读到上一周期的旧快照、滞后一个刷新周期。改为监听 `store.$snapshots`（`didSet` 后 send），读到当前快照。此陷阱与 v1.0.2 修阈值 slider 时遇到的同类（项目陷阱表已记录），`snapshots` 这条此前漏修
+  - **取整不一致（次因）**：状态栏 `Int()` 截断 vs Popup `String(format:"%.0f")` 四舍五入，同一非整数值差 1。新增 `ProviderQuota.displayPercent`（四舍五入、`.5` 向上）作为两处共用的显示值；颜色阈值判定仍用原始 `Double` 的 `primaryUsedPercent`，避免边界颜色错位
+
+### 测试
+
+- 新增 `ProviderQuotaTests`：`displayPercent` 四舍五入边界（`0.5→1`、`1.6→2`、`2.5→3`、`59.6→60`）及无窗口返回 `nil`
+
 ## [1.0.5] - 2026-06-18
 
 **Bug 修复与 UI 完善**

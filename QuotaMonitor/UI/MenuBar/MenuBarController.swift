@@ -155,6 +155,7 @@ public final class MenuBarController: NSObject {
         let menu = NSMenu()
         menu.addItem(withTitle: "手动刷新", action: #selector(menuRefresh), keyEquivalent: "r")
         menu.addItem(withTitle: "设置...", action: #selector(menuOpenSettings), keyEquivalent: ",")
+        menu.addItem(withTitle: "导出诊断日志", action: #selector(menuExportDiag), keyEquivalent: "d")
         menu.addItem(.separator())
         menu.addItem(withTitle: "退出", action: #selector(menuQuit), keyEquivalent: "q")
         menu.items.forEach { $0.target = self }
@@ -173,6 +174,13 @@ public final class MenuBarController: NSObject {
 
     @objc private func menuQuit() {
         NSApplication.shared.terminate(nil)
+    }
+
+    @objc private func menuExportDiag() {
+        // 导出脱敏诊断 JSON 到 ~/Downloads + 剪贴板，并在 Finder 定位文件
+        if let url = appState.exportDiagnostics().url {
+            NSWorkspace.shared.activateFileViewerSelecting([url])
+        }
     }
 
     // MARK: - Title Refresh

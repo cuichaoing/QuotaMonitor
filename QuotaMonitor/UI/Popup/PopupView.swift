@@ -79,6 +79,13 @@ public struct PopupView: View {
                 Text("v\(appVersion)")
                     .font(Typography.caption)
                     .foregroundColor(SemanticColors.secondary)
+                Button("诊断") {
+                    _ = appState.exportDiagnostics()
+                }
+                .buttonStyle(.plain)
+                .font(Typography.caption)
+                .foregroundColor(SemanticColors.secondary)
+                .help("导出当前诊断日志到下载文件夹并复制到剪贴板")
                 Button("退出") {
                     NSApplication.shared.terminate(nil)
                 }

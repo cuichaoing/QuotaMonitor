@@ -76,6 +76,9 @@ public struct PopupView: View {
                         .foregroundColor(SemanticColors.secondary)
                 }
                 Spacer()
+                Text("v\(appVersion)")
+                    .font(Typography.caption)
+                    .foregroundColor(SemanticColors.secondary)
                 Button("退出") {
                     NSApplication.shared.terminate(nil)
                 }
@@ -112,5 +115,10 @@ public struct PopupView: View {
             RoundedRectangle(cornerRadius: 8)
                 .fill(Color.yellow.opacity(0.1))
         )
+    }
+
+    /// 从 Info.plist 读取应用短版本号（例如 1.0.4）
+    private var appVersion: String {
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
     }
 }

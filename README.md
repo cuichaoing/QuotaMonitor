@@ -130,7 +130,7 @@ iOS 端装 Bark App → 复制 device key → 设置里勾选"启用 Bark"并粘
 | MiniMax | `https://api.minimax.io/v1/api/openplatform/coding_plan/remains` | 必须是 Coding Plan Key；`current_interval_remaining_percent` 是"剩余"非"已用"；选 `general` 模型 |
 | 智谱 GLM | `https://api.z.ai/api/monitor/usage/quota/limit` | **禁止** `Bearer` 前缀（裸 Token）；响应在 `data.limits`（不在顶层）；5h 配额用 `TOKENS_LIMIT + unit=3`（不是 `TIME_LIMIT + unit=5`） |
 
-详见 [`docs/HANDOFF_v1.0.2_2026-06-17.md`](docs/HANDOFF_v1.0.2_2026-06-17.md) 关键陷阱章节。
+详见 [`docs/HANDOFF_v1.0.2_github_open_source_2026-06-17.md`](docs/HANDOFF_v1.0.2_github_open_source_2026-06-17.md) 关键陷阱章节。
 
 ---
 
@@ -155,7 +155,7 @@ QuotaMonitor/
       MenuBar/               # MenuBarController
       Notifications/         # AlertLevel / AlertStateMachine / NotificationManager / BarkClient
       Settings/              # SettingsView + SettingsWindowController
-  QuotaMonitorTests/         # 105 个单元测试
+  QuotaMonitorTests/         # 136 个单元测试
   docs/                      # 设计文档 + 各版本交付报告
   .github/                   # Issue / PR 模板
   README.md                  # 本文件

@@ -4,6 +4,28 @@ QuotaMonitor 版本变更历史。
 
 ---
 
+## [1.0.11] - 2026-06-19
+
+**维护：GLM 窗口标签修复 + 文档同步 + git 身份配置**
+
+### 修复
+
+- **GLM 窗口显示「3h」→「5h」**：`GLMProvider` 此前把 GLM 的 `unit` 字段值（3）直接当小时数，拼出错误标签「3h」。实际 `unit=3` 是窗口类型枚举（代表 5h 滚动窗口，见陷阱表）。新增 `unit → 真实小时数` 映射（`3→5h` / `6→周` / `5→月` / default `5h`），连带修正缺失 `nextResetTime` 时的 fallback 推算。**仅影响窗口标签显示，不影响百分比数值**。同步修正了此前固化该 bug 的 4 个测试期望
+
+### 文档
+
+- 同步 README / CLAUDE.md 元信息：版本号（v1.0.2 → v1.0.11）、测试数（105 → 136）、修正失效的 HANDOFF 短名路径（→ `_github_open_source_` 全名）
+
+### 其他
+
+- 配置 git 全局身份（`user.email`），后续 commit 正确关联账户、计入 GitHub Contributors
+
+### 测试
+
+- `swift test` → 136/136 通过（本轮未增减用例，仅修正 GLM 4 个测试的错误期望）
+
+---
+
 ## [1.0.10] - 2026-06-19
 
 **诊断功能升级（schema /2）** — 借 BUG-2026-06-19-01 实战反馈，让诊断 JSON 显式记录「中间层决策」，把「数据被平滑篡改」类问题从「靠 AI 推断」变成「JSON 直读」。详见 `docs/superpowers/specs/2026-06-19-diagnostics-export-evaluation.md`。

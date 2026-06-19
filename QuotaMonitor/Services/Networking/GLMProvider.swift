@@ -76,8 +76,9 @@ public struct GLMProvider: Provider {
 
         // percentage 直接是已用百分比（0-100）
         let percent = KimiProvider.numericValue(entry["percentage"]) ?? 0
-        // unit 决定窗口大小（小时）
-        let unitHours = KimiProvider.numericValue(entry["unit"]).map { Int($0) } ?? 5
+        // unit 是 GLM 的窗口类型枚举（不是小时数）——映射见 CLAUDE.md 陷阱表：
+        //   TOKENS_LIMIT + unit=3 → 5h 滚动窗口（主窗口）/ unit=6 → 周维度 / TIME_LIMIT + unit=5 → MCP 月度
+        let unitHours = Self.hours(forUnit: entry["unit"])
 
         // nextResetTime 是毫秒时间戳
         let resetAt: Date = {
@@ -101,5 +102,16 @@ public struct GLMProvider: Provider {
             primaryWindow: window,
             raw: json
         )
+    }
+
+    /// GLM `unit` 字段是窗口类型枚举，不是小时数。映射到真实窗口时长（小时）。
+    /// 见 CLAUDE.md 陷阱表：unit=3 → 5h 滚动窗口（主窗口）；unit=6 → 周维度；TIME_LIMIT + unit=5 → MCP 月度。
+    private static func hours(forUnit raw: Any?) -> Int {
+        switch KimiProvider.numericValue(raw).map({ Int($0) }) ?? -1 {
+        case 3: return 5          // 5h 滚动窗口
+        case 6: return 24 * 7     // 周维度
+        case 5: return 24 * 30    // MCP 月度
+        default: return 5         // 未知类型 → 默认 5h（GLM 主窗口语义）
+        }
     }
 }

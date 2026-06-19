@@ -105,7 +105,8 @@ final class GLMProviderTests: XCTestCase {
         let window = try XCTUnwrap(quota.primaryWindow)
         XCTAssertEqual(window.usedPercent, 0.0, accuracy: 0.001,
                        "应优先匹配 TOKENS_LIMIT + unit=3 的 5h 配额窗口（0%），不是 TIME_LIMIT+unit=5 的 MCP 月度（9%）")
-        XCTAssertEqual(window.displayName, "3h")
+        XCTAssertEqual(window.displayName, "5h",
+                       "unit=3 是 5h 窗口类型枚举（非小时数），displayName 应为 5h")
     }
 
     func testFallsBackToFirstLimitWhenNo5Hour() async throws {
@@ -128,7 +129,8 @@ final class GLMProviderTests: XCTestCase {
         let quota = try await GLMProvider().fetchQuota(apiKey: "k", using: client)
         let window = try XCTUnwrap(quota.primaryWindow)
         XCTAssertEqual(window.usedPercent, 42, accuracy: 0.001)
-        XCTAssertEqual(window.displayName, "7h")
+        XCTAssertEqual(window.displayName, "5h",
+                       "unit=7 是未知类型，displayName 兜底为 5h（GLM 主窗口语义）")
     }
 
     func testNextResetTime_isMillisecondTimestamp() async throws {
@@ -153,9 +155,9 @@ final class GLMProviderTests: XCTestCase {
 
         let quota = try await GLMProvider().fetchQuota(apiKey: "k", using: client)
         let window = try XCTUnwrap(quota.primaryWindow)
-        // 缺失 nextResetTime -> fallback: now + 3h
-        let delta = abs(window.resetAt.timeIntervalSinceNow - 3 * 3600)
-        XCTAssertLessThan(delta, 5.0, "缺失 nextResetTime 时按 unitHours(=3) 推算 resetAt")
+        // 缺失 nextResetTime -> fallback: now + 5h（unit=3 是 5h 窗口，非 3h）
+        let delta = abs(window.resetAt.timeIntervalSinceNow - 5 * 3600)
+        XCTAssertLessThan(delta, 5.0, "缺失 nextResetTime 时按真实窗口时长（unit=3 → 5h）推算 resetAt")
     }
 
     func testNextResetTime_presentOnMcpMonthlyLimit() async throws {
@@ -181,7 +183,7 @@ final class GLMProviderTests: XCTestCase {
         let window = try XCTUnwrap(quota.primaryWindow)
         XCTAssertEqual(window.usedPercent, 0.0, accuracy: 0.001,
                        "主窗口应该是 5h 配额 (unit=3) 的 0%")
-        XCTAssertEqual(window.displayName, "3h")
+        XCTAssertEqual(window.displayName, "5h")
     }
 
     func testMissingDataField_raisesDecodingFailed() async {

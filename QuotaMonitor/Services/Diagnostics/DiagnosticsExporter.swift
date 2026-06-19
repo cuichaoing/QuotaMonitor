@@ -28,7 +28,8 @@ public struct DiagConfig: Sendable, Equatable {
 }
 
 public enum DiagnosticsExporter {
-    public static let schemaVersion = "QuotaMonitor-diag/1"
+    /// [v1.0.10] schema 升 /2：snapshot 新增 `smoothing` + `fingerprint`；`lastRefreshAt` 改为真实最后刷新时间。
+    public static let schemaVersion = "QuotaMonitor-diag/2"
 
     /// 敏感字符串模式：序列化后从所有字符串值中清除（defense in depth）
     private static let sensitivePatterns: [String] = [
@@ -38,23 +39,28 @@ public enum DiagnosticsExporter {
         #"(?i)api[_-]?key"#
     ]
 
+    /// - Parameter lastRefreshAt: 真实最后一次成功刷新时间；nil 时不输出该字段（v1.0.10 修正：不再误用导出时刻）。
     public static func export(
         snapshots: [ProviderKind: ProviderQuota],
         errors: [ProviderKind: QuotaError],
         history: [DiagEntry],
         config: DiagConfig,
         appVersion: String,
-        now: Date
+        now: Date,
+        lastRefreshAt: Date? = nil
     ) throws -> Data {
-        var rootObject: Any = [
+        var root: [String: Any] = [
             "schema": schemaVersion,
             "exportedAt": iso(now),
             "appVersion": appVersion,
-            "lastRefreshAt": iso(now),
             "config": configDict(config),
             "snapshots": snapshotsDict(snapshots: snapshots, errors: errors),
             "history": history.map(historyEntryDict)
         ]
+        if let last = lastRefreshAt {
+            root["lastRefreshAt"] = iso(last)
+        }
+        var rootObject: Any = root
         sanitize(&rootObject)
         return try JSONSerialization.data(withJSONObject: rootObject, options: [.prettyPrinted, .sortedKeys])
     }
@@ -105,8 +111,21 @@ public enum DiagnosticsExporter {
             d["resetAt"] = iso(w.resetAt)
             d["window"] = w.displayName
         }
+        // [v1.0.10] 暴露指纹 + 平滑决策，让「中间层篡改」类 bug 从推断变直读（BUG-2026-06-19-01 动因）
+        d["fingerprint"] = snap.windowFingerprint
+        d["smoothing"] = smoothingDict(snap.smoothing)
         if let parsed = parsedFields(for: kind, raw: snap.raw) {
             d["parsedFields"] = parsed
+        }
+        return d
+    }
+
+    /// 平滑决策：始终输出 applied（false/true），仅在 applied=true 时附带被丢弃的真实值。
+    private static func smoothingDict(_ s: SmoothingInfo?) -> [String: Any] {
+        let info = s ?? SmoothingInfo(applied: false)
+        var d: [String: Any] = ["applied": info.applied]
+        if let raw = info.rawUsedPercent {
+            d["rawUsedPercent"] = raw
         }
         return d
     }

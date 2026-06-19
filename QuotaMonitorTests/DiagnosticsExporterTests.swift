@@ -100,4 +100,72 @@ final class DiagnosticsExporterTests: XCTestCase {
         let json = try XCTUnwrap(try JSONSerialization.jsonObject(with: data) as? [String: Any])
         XCTAssertEqual(json["schema"] as? String, DiagnosticsExporter.schemaVersion)
     }
+
+    // MARK: - v1.0.10 / schema /2：smoothing / fingerprint / lastRefreshAt
+    // 动因 BUG-2026-06-19-01：本次靠 usedPercent(13) vs percentage(3) 反差"推断"smoothing 篡改；
+    // 升级后诊断 JSON 显式记录 smoothing 决策 + fingerprint，让这类问题从"推断"变"直读"。
+
+    /// 解析 export 结果：顶层 → snapshots → <kind>
+    private func snapshotDict(_ data: Data, _ kind: String) throws -> [String: Any] {
+        let json = try XCTUnwrap(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let snapshots = try XCTUnwrap(json["snapshots"] as? [String: Any])
+        return try XCTUnwrap(snapshots[kind] as? [String: Any])
+    }
+
+    func testExport_smoothingInfo_whenApplied_recordsRawValue() throws {
+        // 平滑保留旧值 13、丢弃本次真实值 3 → 诊断须显式记录 applied=true + rawUsedPercent=3
+        let snap = ProviderQuota(provider: .glm,
+                                 primaryWindow: QuotaWindow(total: 100, used: 13,
+                                                            resetAt: Date(timeIntervalSince1970: 1_700_000_000),
+                                                            displayName: "5h"),
+                                 smoothing: SmoothingInfo(applied: true, rawUsedPercent: 3))
+        let data = try DiagnosticsExporter.export(
+            snapshots: [.glm: snap], errors: [:], history: [],
+            config: makeConfig(), appVersion: "1.0.10", now: Date(timeIntervalSince1970: 1_700_000_100))
+        let glm = try snapshotDict(data, "glm")
+        let smoothing = try XCTUnwrap(glm["smoothing"] as? [String: Any])
+        XCTAssertEqual(smoothing["applied"] as? Bool, true)
+        XCTAssertEqual(smoothing["rawUsedPercent"] as? Double, 3, "rawUsedPercent 应是被丢弃的本次真实值")
+    }
+
+    func testExport_smoothingInfo_whenNotApplied_isFalse() throws {
+        // 未平滑：smoothing.applied=false，无 rawUsedPercent
+        let snap = ProviderQuota(provider: .kimi,
+                                 primaryWindow: QuotaWindow(total: 100, used: 17,
+                                                            resetAt: Date(timeIntervalSince1970: 1_700_000_000),
+                                                            displayName: "5h"))
+        let data = try DiagnosticsExporter.export(
+            snapshots: [.kimi: snap], errors: [:], history: [],
+            config: makeConfig(), appVersion: "1.0.10", now: Date())
+        let kimi = try snapshotDict(data, "kimi")
+        let smoothing = try XCTUnwrap(kimi["smoothing"] as? [String: Any])
+        XCTAssertEqual(smoothing["applied"] as? Bool, false)
+        XCTAssertNil(smoothing["rawUsedPercent"], "未平滑时不应有 rawUsedPercent")
+    }
+
+    func testExport_includesFingerprint() throws {
+        let reset = Date(timeIntervalSince1970: 1_700_000_000)
+        let snap = ProviderQuota(provider: .glm,
+                                 primaryWindow: QuotaWindow(total: 100, used: 3, resetAt: reset, displayName: "5h"))
+        let data = try DiagnosticsExporter.export(
+            snapshots: [.glm: snap], errors: [:], history: [],
+            config: makeConfig(), appVersion: "1.0.10", now: Date())
+        let glm = try snapshotDict(data, "glm")
+        XCTAssertEqual(glm["fingerprint"] as? String, snap.windowFingerprint,
+                       "snapshot 应输出 windowFingerprint 以便诊断指纹类问题")
+    }
+
+    func testExport_lastRefreshAt_usesProvidedValue() throws {
+        // lastRefreshAt 必须是传入的真实最后刷新时间，而非导出时刻（修复语义 bug）
+        let data = try DiagnosticsExporter.export(
+            snapshots: [:], errors: [:], history: [],
+            config: makeConfig(), appVersion: "1.0.10",
+            now: Date(timeIntervalSince1970: 1_700_000_100),
+            lastRefreshAt: Date(timeIntervalSince1970: 1_700_000_050))
+        let json = try XCTUnwrap(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let lastRefreshAt = try XCTUnwrap(json["lastRefreshAt"] as? String)
+        let exportedAt = try XCTUnwrap(json["exportedAt"] as? String)
+        XCTAssertNotEqual(lastRefreshAt, exportedAt,
+                          "lastRefreshAt 应是真实最后刷新时间，而非导出时刻")
+    }
 }

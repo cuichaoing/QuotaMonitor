@@ -10,6 +10,8 @@ import SwiftUI
 
 public struct PopupView: View {
     @ObservedObject public var appState: AppState
+    /// 诊断导出后的瞬时反馈（点击后显示 2 秒再清除）
+    @State private var diagFeedback: String?
 
     public init(appState: AppState) {
         self.appState = appState
@@ -79,12 +81,19 @@ public struct PopupView: View {
                 Text("v\(appVersion)")
                     .font(Typography.caption)
                     .foregroundColor(SemanticColors.secondary)
-                Button("诊断") {
-                    _ = appState.exportDiagnostics()
+                Button {
+                    let r = appState.exportDiagnostics()
+                    diagFeedback = (r.url != nil) ? "已导出+已复制" : "导出失败"
+                    Task {
+                        try? await Task.sleep(nanoseconds: 2_000_000_000)
+                        await MainActor.run { diagFeedback = nil }
+                    }
+                } label: {
+                    Text(diagFeedback ?? "诊断")
+                        .foregroundColor(diagFeedback == "导出失败" ? .red : SemanticColors.secondary)
                 }
                 .buttonStyle(.plain)
                 .font(Typography.caption)
-                .foregroundColor(SemanticColors.secondary)
                 .help("导出当前诊断日志到下载文件夹并复制到剪贴板")
                 Button("退出") {
                     NSApplication.shared.terminate(nil)

@@ -10,6 +10,19 @@ import Foundation
 
 /// 跨平台统一的配额快照。
 /// 关键设计：所有数值都是「绝对值」，UI 层再做归一化。
+
+/// 数据平滑决策的记录（诊断用，v1.0.10）。
+/// `applySmoothing` 保留旧值时填充：`applied = true` + `rawUsedPercent` = 本次被丢弃的真实值。
+/// 让诊断 JSON 能直接看出「展示值是被平滑保留的旧值」，而非靠 usedPercent vs percentage 反差推断。
+public struct SmoothingInfo: Sendable, Equatable {
+    public let applied: Bool
+    public let rawUsedPercent: Double?
+    public init(applied: Bool, rawUsedPercent: Double? = nil) {
+        self.applied = applied
+        self.rawUsedPercent = rawUsedPercent
+    }
+}
+
 public struct ProviderQuota: @unchecked Sendable, Equatable {
     public let provider: ProviderKind
     public let capturedAt: Date
@@ -23,18 +36,23 @@ public struct ProviderQuota: @unchecked Sendable, Equatable {
     /// 服务端返回的原始 raw payload（调试 / 持久化用）
     public let raw: [String: Any]?
 
+    /// 数据平滑决策记录（诊断用）；nil = 未被平滑。详见 `SmoothingInfo`。
+    public let smoothing: SmoothingInfo?
+
     public init(
         provider: ProviderKind,
         capturedAt: Date = Date(),
         primaryWindow: QuotaWindow?,
         weeklyWindow: QuotaWindow? = nil,
-        raw: [String: Any]? = nil
+        raw: [String: Any]? = nil,
+        smoothing: SmoothingInfo? = nil
     ) {
         self.provider = provider
         self.capturedAt = capturedAt
         self.primaryWindow = primaryWindow
         self.weeklyWindow = weeklyWindow
         self.raw = raw
+        self.smoothing = smoothing
     }
 
     public var primaryUsedPercent: Double? {
@@ -72,6 +90,7 @@ public struct ProviderQuota: @unchecked Sendable, Equatable {
         lhs.provider == rhs.provider &&
         lhs.capturedAt == rhs.capturedAt &&
         lhs.primaryWindow == rhs.primaryWindow &&
-        lhs.weeklyWindow == rhs.weeklyWindow
+        lhs.weeklyWindow == rhs.weeklyWindow &&
+        lhs.smoothing == rhs.smoothing
     }
 }

@@ -204,6 +204,34 @@ final class NetworkingServiceTests: XCTestCase {
                        "窗口重置后 used 从 13 跌到 3 是合法的，平滑不得保留旧值 13（BUG-2026-06-19-01）")
     }
 
+    func testSmoothing_attachesInfoWhenRetainingPreviousValue() async throws {
+        // 同窗口（同 resetAt）下 used 倒退 → 平滑保留旧值，且须在结果上标记
+        // smoothing.applied=true + rawUsedPercent=本次被丢弃的真实值（v1.0.10 诊断升级）
+        try mockKeychain.save("k1", for: .kimi)
+
+        var usedValue: Double = 60
+        MockURLProtocol.handler = { req in
+            let json = """
+            {"limits":[{"detail":{"limit":"100","used":"\(Int(usedValue))","resetTime":"2026-06-17T20:00:00Z"},"window":{"duration":300,"timeUnit":"TIME_UNIT_MINUTE"}}]}
+            """
+            return MockURLProtocol.jsonResponse(url: req.url!, json: json)
+        }
+
+        let service = NetworkingService(keychain: mockKeychain, httpClient: client)
+
+        usedValue = 60
+        _ = await service.fetchAll([.kimi])
+
+        usedValue = 40   // 同窗口倒退
+        let r2 = await service.fetchAll([.kimi])
+        let q2 = try XCTUnwrap(try XCTUnwrap(r2[.kimi]).get())
+        let smoothing = try XCTUnwrap(q2.smoothing, "被平滑保留的快照应携带 smoothing 信息")
+        XCTAssertEqual(smoothing.applied, true)
+        let rawUsed = try XCTUnwrap(smoothing.rawUsedPercent, "applied=true 时应有 rawUsedPercent")
+        XCTAssertEqual(rawUsed, 40, accuracy: 0.001,
+                       "rawUsedPercent 应是被丢弃的本次真实值 40")
+    }
+
     // MARK: - 网络错误归因（BUG-2026-06-18-01 根因 A）
     // 修复前 HTTPClient 把所有 URLError 硬编码成 networkUnreachable(.kimi)，
     // 导致 MiniMax / GLM 的网络错误被错误归因到 Kimi（UI 显示 "Kimi Code 网络不可达"）。

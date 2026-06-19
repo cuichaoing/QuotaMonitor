@@ -4,6 +4,31 @@ QuotaMonitor 版本变更历史。
 
 ---
 
+## [1.0.10] - 2026-06-19
+
+**诊断功能升级（schema /2）** — 借 BUG-2026-06-19-01 实战反馈，让诊断 JSON 显式记录「中间层决策」，把「数据被平滑篡改」类问题从「靠 AI 推断」变成「JSON 直读」。详见 `docs/superpowers/specs/2026-06-19-diagnostics-export-evaluation.md`。
+
+### 新增 / 改进
+
+- **A 记录平滑决策**：`snapshots.<kind>` 新增 `smoothing: {applied, rawUsedPercent}`。`applySmoothing` 保留旧值时标记 `applied=true` 并记录被丢弃的本次真实值。本次 bug 正是靠 `usedPercent(13) vs percentage(3)` 反差推断出 smoothing 篡改——升级后这类信号直接写在 JSON 里，无需推断
+- **B 记录窗口指纹**：`snapshots.<kind>` 新增 `fingerprint` 字段（= `windowFingerprint`），让「新旧窗口指纹相同」一眼可见
+- **D 修正 `lastRefreshAt` 语义**：原本误用导出时刻，现改为真实最后刷新时间（`store.lastRefreshAt`）；无值时不输出
+- **E Popup 反馈**：Popup「诊断」按钮点击后显示「已导出+已复制」2 秒（失败显红），不再静默无声
+- **G schema 升版** `QuotaMonitor-diag/1` → `QuotaMonitor-diag/2`
+
+### 实现
+
+- `ProviderQuota` 新增 `SmoothingInfo` 类型 + `smoothing` 字段（init 默认 nil，不破坏现有调用）
+- `DiagnosticsExporter`：`export` 加 `lastRefreshAt` 参数；`okDict` 输出 `fingerprint` + `smoothing`；schemaVersion → `/2`
+- `NetworkingService.applySmoothing` 保留旧值时填 `SmoothingInfo(applied: true, rawUsedPercent: 被丢弃真实值)`
+
+### 测试
+
+- 新增 `DiagnosticsExporterTests` 4 例（smoothing applied / notApplied、fingerprint、lastRefreshAt 真实值）+ `NetworkingServiceTests` 1 例（平滑保留时携带 smoothing 信息）
+- `swift test` → 136/136 通过（1.0.9 为 131，本轮净增 5）
+
+---
+
 ## [1.0.9] - 2026-06-19
 
 **Bug 修复：GLM 额度卡在旧值（网页 3% / 状态栏 13%，刷新无效）** — 服务端窗口重置后真实值回落，被数据平滑逻辑误判为「同窗口倒退」而永久卡住。详见 `docs/incident-reports/2026-06-19-glm-smoothing-stuck-at-stale-value.md`。

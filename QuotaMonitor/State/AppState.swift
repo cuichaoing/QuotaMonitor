@@ -147,7 +147,8 @@ public final class AppState: ObservableObject {
                 history: diagHistory.recent(since: now.addingTimeInterval(-300)),
                 config: config,
                 appVersion: version,
-                now: now)
+                now: now,
+                lastRefreshAt: store.lastRefreshAt)
 
             let df = DateFormatter()
             df.dateFormat = "yyyyMMdd-HHmmss"

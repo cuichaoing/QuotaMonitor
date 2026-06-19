@@ -117,7 +117,9 @@ public actor NetworkingService {
                 capturedAt: quota.capturedAt,
                 primaryWindow: prevWin,
                 weeklyWindow: quota.weeklyWindow,
-                raw: quota.raw
+                raw: quota.raw,
+                // [v1.0.10] 标记本次展示值是被平滑保留的旧值，并记录被丢弃的真实值（curWin.used），供诊断直读
+                smoothing: SmoothingInfo(applied: true, rawUsedPercent: curWin.used)
             )
         }
         return quota

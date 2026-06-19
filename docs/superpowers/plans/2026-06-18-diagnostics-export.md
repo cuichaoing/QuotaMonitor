@@ -806,3 +806,13 @@ git add -A && git commit -m "chore(release): 准备 1.0.8"
 - **Spec 覆盖**：§2 需求（范围/输出/格式/内容/入口/隐私）→ Task 1-5 全覆盖；§3 架构 4 组件 → Task 1/2/3/4；§4 JSON schema → Task 3 实现 + 测试；§5 脱敏 → Task 3 脱敏测试；§6 测试计划 → Task 1/2/3；§7 入口 → Task 5。无遗漏。
 - **Placeholder**：无。`SettingsStore.keyState(for:) == .configured` 已核对真实 API（`:114`/`:191`）。
 - **类型一致**：`DiagProviderOutcome` / `DiagEntry` / `DiagHistoryStore.recent(since:)` / `DiagnosticsExporter.export(...)` / `AppState.exportDiagnostics()` / `DiagExportResult` 在 Task 2/3/4/5 引用名一致。`networkUnreachable(_, underlying:)` 在 Task 1/3 一致。
+
+---
+
+## 执行偏离记录（executing 阶段，代码 + CHANGELOG 是权威）
+
+实际执行中相对本 plan 的偏离：
+
+- **T3/T4 DiagConfig 值类型**：plan 写 exporter 接 `settings: SettingsStore`，但 SettingsStore 是 `@MainActor`，纯函数 exporter 接它触发 actor 隔离错误。改为新增 `DiagConfig`（Sendable 值类型），由 `AppState.exportDiagnostics` 从 SettingsStore 构造后传入。exporter 保持 nonisolated 纯函数、可单测。
+- **T1 连带**：加 `underlying` 后，v1.0.7 的 `NetworkingServiceTests` 里 `case .networkUnreachable(let kind)` 改为 `(_, _)`（单值 tuple 匹配已 deprecated）。
+- **T2 DiagHistoryStore nonisolated**：去掉 `@MainActor`（非 ObservableObject、不直接驱动 UI，仅 AppState 单线程用）。

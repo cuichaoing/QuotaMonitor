@@ -4,6 +4,26 @@ QuotaMonitor 版本变更历史。
 
 ---
 
+## [1.0.9] - 2026-06-19
+
+**Bug 修复：GLM 额度卡在旧值（网页 3% / 状态栏 13%，刷新无效）** — 服务端窗口重置后真实值回落，被数据平滑逻辑误判为「同窗口倒退」而永久卡住。详见 `docs/incident-reports/2026-06-19-glm-smoothing-stuck-at-stale-value.md`。
+
+### 修复
+
+- **窗口指纹相位错位（根因）**：`ProviderQuota.windowFingerprint` 此前用 `capturedAt/18000` 机械切 5h 桶，与服务端真实窗口边界（`resetAt`）相位错位。真实窗口在桶内重置时指纹不变，`applySmoothing` 把新窗口的合法低值（如 3%）误判为「同窗口被动流失倒退」，丢弃真实值、保留旧值（如 13%），导致刷新多少次都不变。改为锚定 `primaryWindow.resetAt`（取整到分钟吸收服务端毫秒抖动）：同一 `resetAt` = 同一窗口（防抖 / 告警去重仍生效）；窗口重置 → `resetAt` 变 → 指纹变 → 平滑跳过 → 接受真实新值。连带修正 `AlertStateMachine` 去重语义——窗口重置后越过阈值能正确重新告警（旧实现跨桶边界会漏报）
+
+### 测试
+
+- 新增 `NetworkingServiceTests.testSmoothing_acceptsLowerValueWhenServerWindowResets`：GLM 上窗口 13% → 窗口重置后真实 3%，断言接受 3（修复前卡在 13）
+- 改写 `ProviderQuotaTests` 指纹用例为 resetAt 语义：`testWindowFingerprint_stableForSameResetAt`（同 resetAt 同指纹）、`testWindowFingerprint_changesWhenServerWindowResets`（resetAt 变则指纹变）、`testWindowFingerprint_distinguishesPlatforms`
+- `swift test` → 131/131 通过（1.0.8 为 130，本轮净增 1）
+
+### 已知后续（本轮未做）
+
+- GLM 窗口显示「3h」应为「5h」：`GLMProvider` 把 `unit=3` 直接当小时数，实际 unit=3 代表 5h 窗口。同源小问题，不影响主数值，待单独修复
+
+---
+
 ## [1.0.8] - 2026-06-18
 
 **新功能：诊断日志导出** — 一键"拍照式"导出当前配额状态镜像 + 近期刷新轨迹为脱敏 JSON（剪贴板 + 文件双写），供 AI 快速诊断。详见 `docs/superpowers/specs/2026-06-18-diagnostics-export-design.md`。

@@ -9,44 +9,48 @@ import XCTest
 @testable import QuotaMonitor
 
 final class ProviderQuotaTests: XCTestCase {
-    func testWindowFingerprint_stableWithin5Hours() {
-        // 同一 5h 窗口内，不同时间戳应产生相同 fingerprint
-        let t1 = Date(timeIntervalSince1970: 1_716_000_000)  // 2024-05-23 12:00:00 UTC
-        let t2 = Date(timeIntervalSince1970: 1_716_000_000 + 60)  // 1 分钟后
-        let t3 = Date(timeIntervalSince1970: 1_716_000_000 + 3600)  // 1 小时后
+    // MARK: - 窗口指纹（v1.0.9：锚定服务端 resetAt，而非抓取时刻）
+    // 修复 BUG-2026-06-19-01：原指纹按 capturedAt/18000 机械切桶，与服务端真实窗口
+    // 相位错位，导致真实窗口重置后被 applySmoothing 误判为「同窗口倒退」而卡住旧值。
+    // 新语义：同一 resetAt = 同一窗口（防抖/告警去重生效）；resetAt 变 = 新窗口（接受真实新值）。
 
-        let q1 = ProviderQuota(provider: .kimi, capturedAt: t1, primaryWindow: nil)
-        let q2 = ProviderQuota(provider: .kimi, capturedAt: t2, primaryWindow: nil)
-        let q3 = ProviderQuota(provider: .kimi, capturedAt: t3, primaryWindow: nil)
+    func testWindowFingerprint_stableForSameResetAt() {
+        // 同一服务端窗口（resetAt 相同）内，不同抓取时刻应产生相同 fingerprint
+        let reset = Date(timeIntervalSince1970: 1_750_300_000)
+        let win = QuotaWindow(total: 100, used: 3, resetAt: reset, displayName: "5h")
+
+        let q1 = ProviderQuota(provider: .glm, capturedAt: Date(timeIntervalSince1970: 1_750_300_060), primaryWindow: win)
+        let q2 = ProviderQuota(provider: .glm, capturedAt: Date(timeIntervalSince1970: 1_750_303_600), primaryWindow: win)
 
         XCTAssertEqual(q1.windowFingerprint, q2.windowFingerprint,
-                       "同一窗口内 fingerprint 应相同")
-        XCTAssertEqual(q1.windowFingerprint, q3.windowFingerprint,
-                       "1 小时内 fingerprint 应相同")
+                       "同一 resetAt（同一窗口）内 fingerprint 应相同")
     }
 
-    func testWindowFingerprint_changesAt5HourBoundary() {
-        // 跨过 5h 边界时，fingerprint 应变化
-        // 5h = 18000s
-        let t1 = Date(timeIntervalSince1970: 1_716_000_000)
-        let t2 = Date(timeIntervalSince1970: 1_716_000_000 + 18000)  // 正好 5h 后
-        let t3 = Date(timeIntervalSince1970: 1_716_000_000 + 18001)  // 5h+1s
+    func testWindowFingerprint_changesWhenServerWindowResets() {
+        // 服务端窗口重置（resetAt 变化）时，fingerprint 必须变化
+        // —— 否则平滑逻辑会把新窗口的真实低值误判为「同窗口倒退」而丢弃（BUG-2026-06-19-01）。
+        // 注意：两次 capturedAt 故意落在同一 18000s 桶内（模拟 05:27 vs 05:28 同桶），
+        // 旧实现（按 capturedAt 切桶）下两者指纹相同 → 本断言失败（RED）。
+        let oldReset = Date(timeIntervalSince1970: 1_750_300_000)
+        let newReset = Date(timeIntervalSince1970: 1_750_318_000)  // +5h，新窗口重置点
 
-        let q1 = ProviderQuota(provider: .kimi, capturedAt: t1, primaryWindow: nil)
-        let q2 = ProviderQuota(provider: .kimi, capturedAt: t2, primaryWindow: nil)
-        let q3 = ProviderQuota(provider: .kimi, capturedAt: t3, primaryWindow: nil)
+        let qOld = ProviderQuota(provider: .glm,
+                                 capturedAt: Date(timeIntervalSince1970: 1_750_300_060),
+                                 primaryWindow: QuotaWindow(total: 100, used: 13, resetAt: oldReset, displayName: "5h"))
+        let qNew = ProviderQuota(provider: .glm,
+                                 capturedAt: Date(timeIntervalSince1970: 1_750_300_120),
+                                 primaryWindow: QuotaWindow(total: 100, used: 3, resetAt: newReset, displayName: "5h"))
 
-        XCTAssertNotEqual(q1.windowFingerprint, q2.windowFingerprint,
-                          "跨过 5h 边界 fingerprint 应变化")
-        XCTAssertEqual(q2.windowFingerprint, q3.windowFingerprint,
-                       "5h 边界后短时间内 fingerprint 应保持")
+        XCTAssertNotEqual(qOld.windowFingerprint, qNew.windowFingerprint,
+                          "服务端窗口重置（resetAt 变）后 fingerprint 必须变化")
     }
 
     func testWindowFingerprint_distinguishesPlatforms() {
-        let t = Date()
-        let qKimi = ProviderQuota(provider: .kimi, capturedAt: t, primaryWindow: nil)
-        let qMiniMax = ProviderQuota(provider: .minimax, capturedAt: t, primaryWindow: nil)
-        let qGLM = ProviderQuota(provider: .glm, capturedAt: t, primaryWindow: nil)
+        let reset = Date(timeIntervalSince1970: 1_750_300_000)
+        let win = QuotaWindow(total: 100, used: 5, resetAt: reset, displayName: "5h")
+        let qKimi = ProviderQuota(provider: .kimi, primaryWindow: win)
+        let qMiniMax = ProviderQuota(provider: .minimax, primaryWindow: win)
+        let qGLM = ProviderQuota(provider: .glm, primaryWindow: win)
 
         XCTAssertNotEqual(qKimi.windowFingerprint, qMiniMax.windowFingerprint)
         XCTAssertNotEqual(qKimi.windowFingerprint, qGLM.windowFingerprint)

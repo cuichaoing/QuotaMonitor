@@ -53,11 +53,16 @@ public struct ProviderQuota: @unchecked Sendable, Equatable {
         primaryUsedPercent.map { Int($0.rounded(.toNearestOrAwayFromZero)) }
     }
 
-    /// 用于去重状态机的窗口指纹（同窗口去重）
-    /// 公式：floor(epoch / 18000)，每 5h 一个 ID
+    /// 用于去重状态机的窗口指纹（同窗口去重 / 平滑防抖）。
+    /// [v1.0.9 / BUG-2026-06-19-01] 锚定服务端真实窗口的 resetAt，而非抓取时刻。
+    /// 旧实现用 capturedAt/18000 机械切 5h 桶，与服务端真实窗口相位错位：
+    /// 真实窗口在桶内重置时指纹不变，被 applySmoothing 误判为「同窗口倒退」而卡住旧值。
+    /// 新语义：同一 resetAt = 同一窗口（防抖 / 告警去重生效）；
+    ///         服务端窗口重置 → resetAt 变 → 指纹变 → 平滑跳过 → 接受真实新值。
+    /// resetAt 取整到分钟，吸收服务端毫秒级抖动；无窗口时退化为 "<kind>-0"。
     public var windowFingerprint: String {
-        let epoch = Int(capturedAt.timeIntervalSince1970)
-        return "\(provider.rawValue)-\(epoch / 18000)"
+        let resetEpoch = Int(primaryWindow?.resetAt.timeIntervalSince1970 ?? 0) / 60
+        return "\(provider.rawValue)-\(resetEpoch)"
     }
 
     // MARK: - Equatable

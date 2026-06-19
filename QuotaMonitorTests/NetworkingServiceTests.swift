@@ -169,6 +169,41 @@ final class NetworkingServiceTests: XCTestCase {
                        "同窗口内 used 增加是正常消耗，应通过")
     }
 
+    // MARK: - 数据平滑（BUG-2026-06-19-01：窗口重置后的合法下降不得被卡住）
+
+    func testSmoothing_acceptsLowerValueWhenServerWindowResets() async throws {
+        // 复现真实 bug：GLM 上窗口 used=13，服务端窗口重置后新窗口真实 used=3。
+        // 旧实现按 capturedAt 切指纹，两次抓取落在同一桶 → 平滑判定「3 < 13 = 倒退」→ 卡住 13。
+        // 修复后指纹锚定 resetAt，窗口重置（nextResetTime 推进）→ 指纹变 → 不平滑 → 接受 3。
+        try mockKeychain.save("g1", for: .glm)
+
+        var percentage: Double = 13
+        var nextResetMs: Int64 = 1_750_300_000_000      // 旧窗口重置点（毫秒）
+        MockURLProtocol.handler = { req in
+            let json = """
+            {"code":200,"success":true,"data":{"limits":[{"type":"TOKENS_LIMIT","unit":3,"percentage":\(percentage),"nextResetTime":\(nextResetMs)}]}}
+            """
+            return MockURLProtocol.jsonResponse(url: req.url!, json: json)
+        }
+
+        let service = NetworkingService(keychain: mockKeychain, httpClient: client)
+
+        // 第一次：上窗口 used=13
+        percentage = 13
+        nextResetMs = 1_750_300_000_000
+        let r1 = await service.fetchAll([.glm])
+        let w1 = try XCTUnwrap(try XCTUnwrap(r1[.glm]).get().primaryWindow)
+        XCTAssertEqual(w1.used, 13, accuracy: 0.001)
+
+        // 第二次：服务端窗口已重置（nextResetTime 推进 5h），新窗口真实 used=3
+        percentage = 3
+        nextResetMs = 1_750_318_000_000                  // +5h
+        let r2 = await service.fetchAll([.glm])
+        let w2 = try XCTUnwrap(try XCTUnwrap(r2[.glm]).get().primaryWindow)
+        XCTAssertEqual(w2.used, 3, accuracy: 0.001,
+                       "窗口重置后 used 从 13 跌到 3 是合法的，平滑不得保留旧值 13（BUG-2026-06-19-01）")
+    }
+
     // MARK: - 网络错误归因（BUG-2026-06-18-01 根因 A）
     // 修复前 HTTPClient 把所有 URLError 硬编码成 networkUnreachable(.kimi)，
     // 导致 MiniMax / GLM 的网络错误被错误归因到 Kimi（UI 显示 "Kimi Code 网络不可达"）。

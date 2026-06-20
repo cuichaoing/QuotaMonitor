@@ -10,11 +10,17 @@ import SwiftUI
 
 public struct PopupView: View {
     @ObservedObject public var appState: AppState
+    /// [BUG-2026-06-20-01] 单独把 store 暴露成 @ObservedObject，让 SwiftUI 订阅 store.objectWillChange。
+    /// AppState.store 是 `let` 属性（不是 @Published），store.snapshots 变化不会触发 appState.objectWillChange，
+    /// 仅靠 @ObservedObject var appState 订阅时，PopupView body 不会响应 store.snapshots 变化，
+    /// 导致 Popup 数字卡在用户打开 Popup 那一刻、状态栏持续更新——形成"状态栏新、Pop 旧"的稳定分裂。
+    @ObservedObject private var store: QuotaStore
     /// 诊断导出后的瞬时反馈（点击后显示 2 秒再清除）
     @State private var diagFeedback: String?
 
     public init(appState: AppState) {
         self.appState = appState
+        self.store = appState.store
     }
 
     public var body: some View {
@@ -24,7 +30,7 @@ public struct PopupView: View {
                 Text("QuotaMonitor")
                     .font(Typography.title)
                 Spacer()
-                if appState.store.isRefreshing {
+                if store.isRefreshing {
                     ProgressView()
                         .controlSize(.small)
                         .scaleEffect(0.6)
@@ -41,7 +47,7 @@ public struct PopupView: View {
             }
 
             // 首次启动引导
-            if !appState.store.hasAnySnapshot {
+            if !store.hasAnySnapshot {
                 onboardingHint
             }
 
@@ -51,8 +57,8 @@ public struct PopupView: View {
             ForEach(ProviderKind.allCases.sorted(by: { $0.sortOrder < $1.sortOrder }), id: \.self) { kind in
                 ProviderCardView(
                     kind: kind,
-                    quota: appState.store.snapshots[kind],
-                    error: appState.store.errors[kind]
+                    quota: store.snapshots[kind],
+                    error: store.errors[kind]
                 )
             }
 
@@ -68,7 +74,7 @@ public struct PopupView: View {
                 .foregroundColor(SemanticColors.secondary)
                 .help("管理 API Key 和刷新频率")
 
-                if let last = appState.store.lastRefreshAt {
+                if let last = store.lastRefreshAt {
                     Text("刷新于 \(last, style: .time)")
                         .font(Typography.caption)
                         .foregroundColor(SemanticColors.secondary)

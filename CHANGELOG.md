@@ -4,6 +4,20 @@ QuotaMonitor 版本变更历史。
 
 ---
 
+## [1.0.12] - 2026-06-20
+
+**Bug 修复：Pop 菜单数字卡在打开时刻（状态栏新、Pop 旧，稳定分裂）** — 详见 `docs/incident-reports/2026-06-20-popup-vs-menubar-unverified.md`（注：原报告标题误标"unverified"，实际根因已定位并修复）。
+
+### 修复
+
+- **Pop 菜单不响应 `store.snapshots` 变化**：`PopupView` 仅用 `@ObservedObject var appState: AppState`，但 `AppState.store` 是 `let` 属性（非 `@Published`），`store.snapshots` 变化不会触发 `appState.objectWillChange`，PopupView body 只在 NSPopover 首次显示时求值一次、之后不更新。结果就是状态栏（用 `appState.store.$snapshots` 直接订阅，会响应）持续更新、Pop 停在用户打开 Pop 那刻的快照——形成"状态栏新、Pop 旧"的稳定数字差。修复：`PopupView` 内部把 `appState.store` 单独提取成 `@ObservedObject private var store: QuotaStore`，body 内统一改用 `store.xxx`，让 SwiftUI 订阅 `store.objectWillChange`，body 在 `store.snapshots` 变化时自动重算
+
+### 测试
+
+- `swift test` → 136/136 通过（无新增用例；SwiftUI view body 重算测试需 UI 框架，非 unit test 范围；本次修复为 SwiftUI idiomatic + 实机验证覆盖）
+
+---
+
 ## [1.0.11] - 2026-06-19
 
 **维护：GLM 窗口标签修复 + 文档同步 + git 身份配置**

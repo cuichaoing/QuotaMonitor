@@ -102,7 +102,7 @@
 - [ ] **Step 5: 验证 build**
 
 ```bash
-cd /Users/cc/Documents/我的代码/2026.6.17-QuotaMonitor
+cd /Users/cc/Developer/2026.6.17-QuotaMonitor
 swift build -c release
 ```
 

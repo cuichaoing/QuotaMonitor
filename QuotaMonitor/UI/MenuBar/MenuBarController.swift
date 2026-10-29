@@ -31,6 +31,73 @@ public enum MenuBarSegment: Equatable {
     }
 }
 
+/// 状态栏标题的渲染方案（纯逻辑，无 AppKit 依赖，可单测）。
+/// [v1.1.1] 用户需求：
+///   1. 全部配额都是绿色时 → 状态栏只显示绿色的数字（安静模式，去掉 K/M/G/Z 字母）
+///   2. 有平台进入红色档（≥ 危险阈值，通常是打满 100%）→ 该数字后加括号倒计时
+///      （例：`K 100 (1h56m)`），倒计时由该平台的窗口重置时刻算出
+public struct MenuBarTitlePlan: Equatable {
+    public enum Item: Equatable {
+        /// 正常数值（isExhausted = 进入红色档，需要附倒计时）
+        case value(kind: ProviderKind, displayPercent: Int, rawPercent: Double, isExhausted: Bool)
+        /// 抓取失败
+        case failed(kind: ProviderKind)
+        /// 无数据
+        case placeholder(kind: ProviderKind)
+    }
+
+    public let items: [Item]
+    /// 安静模式：全部平台都是绿色 → 只渲染数字
+    public let quiet: Bool
+
+    public init(
+        snapshots: [ProviderKind: ProviderQuota],
+        errors: [ProviderKind: QuotaError],
+        warningThreshold: Double,
+        dangerThreshold: Double
+    ) {
+        let sorted = ProviderKind.allCases.sorted { $0.sortOrder < $1.sortOrder }
+        var built: [Item] = []
+        for kind in sorted {
+            let segment = MenuBarSegment.resolve(snapshot: snapshots[kind], error: errors[kind])
+            switch segment {
+            case .value(let display, let raw):
+                built.append(.value(
+                    kind: kind,
+                    displayPercent: display,
+                    rawPercent: raw,
+                    isExhausted: raw >= dangerThreshold))
+            case .failed:
+                built.append(.failed(kind: kind))
+            case .placeholder:
+                built.append(.placeholder(kind: kind))
+            }
+        }
+        self.items = built
+
+        // 全绿才安静：任何失败 / 占位 / 非绿数值都会让字母回归
+        self.quiet = built.allSatisfy { item in
+            if case .value(_, _, let raw, let exhausted) = item {
+                return raw < warningThreshold && !exhausted
+            }
+            return false
+        }
+    }
+
+    /// 紧凑倒计时文案：1h56m / 45m / 12s
+    public static func compactDuration(_ seconds: TimeInterval) -> String {
+        let total = max(0, Int(seconds.rounded()))
+        let hours = total / 3600
+        let minutes = (total % 3600) / 60
+        let secs = total % 60
+        if hours > 0 {
+            return minutes > 0 ? "\(hours)h\(String(format: "%02d", minutes))m" : "\(hours)h"
+        }
+        if minutes > 0 { return "\(minutes)m" }
+        return "\(secs)s"
+    }
+}
+
 @MainActor
 public final class MenuBarController: NSObject {
     private let statusItem: NSStatusItem
@@ -207,31 +274,49 @@ public final class MenuBarController: NSObject {
             attributes: [.foregroundColor: labelColor]
         ))
 
-        let sorted = ProviderKind.allCases.sorted(by: { $0.sortOrder < $1.sortOrder })
-        for (i, kind) in sorted.enumerated() {
+        // [v1.1.1] 渲染方案（纯逻辑，见 MenuBarTitlePlan）：
+        //   - 全绿 → 安静模式：只显示绿色数字，不带 K/M/G/Z 字母
+        //   - 非全绿 → 字母 + 数字；红色档数字后附括号倒计时（还有多久重置）
+        let plan = MenuBarTitlePlan(
+            snapshots: snapshots,
+            errors: appState.store.errors,
+            warningThreshold: appState.settings.warningThreshold,
+            dangerThreshold: appState.settings.dangerThreshold)
+
+        for (i, item) in plan.items.enumerated() {
             if i > 0 {
                 attributed.append(NSAttributedString(
                     string: "  ",
                     attributes: [.foregroundColor: labelColor]
                 ))
             }
-            // 字母 K/M/G（labelColor，常规字重）
-            attributed.append(NSAttributedString(
-                string: kind.shortName,
-                attributes: [.foregroundColor: labelColor, .font: monoBoldFont]
-            ))
+            // 字母 K/M/G/Z（安静模式下省略；labelColor，常规字重）
+            if !plan.quiet {
+                let letter = " " + kindLetter(item)
+                attributed.append(NSAttributedString(
+                    string: letter,
+                    attributes: [.foregroundColor: labelColor, .font: monoBoldFont]
+                ))
+            }
             // 数字 / "!" / "--"（语义色，等宽字重）
             // [BUG-2026-06-18-01 根因 B] 用 MenuBarSegment.resolve 统一决策：
             // error 优先 → "!" 红色（与 Popup "离线" 红标对齐），不再只看 snapshot
             //   而显示陈旧的旧百分比，杜绝状态栏与 Popup 的成功/失败状态分裂。
             let numberText: String
             let numberColor: NSColor
-            switch MenuBarSegment.resolve(snapshot: snapshots[kind], error: appState.store.errors[kind]) {
+            switch item {
             case .failed:
                 numberText = " !"
                 numberColor = .systemRed
-            case .value(let display, let raw):
-                numberText = " \(display)"
+            case .value(let kind, let display, let raw, let isExhausted):
+                var text = " \(display)"
+                if isExhausted, let resetAt = snapshots[kind]?.primaryWindow?.resetAt {
+                    let remain = resetAt.timeIntervalSinceNow
+                    if remain > 0 {
+                        text += " (\(MenuBarTitlePlan.compactDuration(remain)))"
+                    }
+                }
+                numberText = text
                 numberColor = Self.nsColor(for: raw, settings: appState.settings)
             case .placeholder:
                 numberText = " --"
@@ -243,6 +328,15 @@ public final class MenuBarController: NSObject {
             ))
         }
         button.attributedTitle = attributed
+    }
+
+    /// 取平台字母（安静模式下不渲染）
+    private func kindLetter(_ item: MenuBarTitlePlan.Item) -> String {
+        switch item {
+        case .value(let kind, _, _, _): return kind.shortName
+        case .failed(let kind): return kind.shortName
+        case .placeholder(let kind): return kind.shortName
+        }
     }
 
     /// 把 SwiftUI SemanticColors 映射到 NSColor。

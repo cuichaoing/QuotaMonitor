@@ -19,15 +19,20 @@ public actor NetworkingService {
     private let keychain: KeychainStoreType
     private let httpClient: HTTPClient
     private let providers: [ProviderKind: any Provider]
+    /// Gemini 网页会话通道（非 API Key 型）。nil = 运行时用默认单例，
+    /// 惰性解析避免在 init（任意线程）里触碰 @MainActor 单例
+    private let geminiSessionOverride: GeminiSessionProviding?
     private let logger = Logger(subsystem: "app.quotamonitor", category: "Networking")
     private var lastSnapshot: [ProviderKind: ProviderQuota] = [:]
 
     public init(
         keychain: KeychainStoreType = KeychainStore.shared,
-        httpClient: HTTPClient = .shared
+        httpClient: HTTPClient = .shared,
+        geminiSession: GeminiSessionProviding? = nil
     ) {
         self.keychain = keychain
         self.httpClient = httpClient
+        self.geminiSessionOverride = geminiSession
         self.providers = [
             .kimi:    KimiProvider(),
             .minimax: MiniMaxProvider(),
@@ -62,6 +67,20 @@ public actor NetworkingService {
     /// 拉取单个平台
     public func fetchOne(_ kind: ProviderKind) async -> Result<ProviderQuota, QuotaError> {
         do {
+            // Gemini：网页会话型，不走 Keychain / HTTPClient，单独分流
+            if kind == .gemini {
+                // ?? 的右操作数是 autoclosure，不能直接 await → 分支取
+                let session: GeminiSessionProviding
+                if let override = geminiSessionOverride {
+                    session = override
+                } else {
+                    session = await GeminiSessionManager.shared
+                }
+                let raw = try await session.fetchQuota()
+                let smoothed = applySmoothing(raw, kind: kind)
+                self.lastSnapshot[kind] = smoothed
+                return .success(smoothed)
+            }
             guard let key = try keychain.read(for: kind), !key.isEmpty else {
                 throw QuotaError.keyMissing(kind)
             }

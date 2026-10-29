@@ -66,12 +66,16 @@ public struct SettingsView: View {
             Text("平台配置")
                 .font(.headline)
 
-            Text("填入 API Key 后启用该平台的配额监控")
+            Text("API Key 平台填入 Key；Gemini 为订阅网页版，点「登录」走 Google 账号登录")
                 .font(.caption)
                 .foregroundColor(.secondary)
 
             ForEach(ProviderKind.allCases.sorted(by: { $0.sortOrder < $1.sortOrder }), id: \.self) { kind in
-                ProviderKeyRow(kind: kind, settings: settings)
+                if kind == .gemini {
+                    GeminiLoginRow(settings: settings)
+                } else {
+                    ProviderKeyRow(kind: kind, settings: settings)
+                }
             }
         }
     }
@@ -209,6 +213,83 @@ private struct BarkSection: View {
 
     private func delete() {
         settings.deleteBarkKey()
+    }
+}
+
+// MARK: - GeminiLoginRow（网页会话型：无 API Key，走 Google 登录）
+
+private struct GeminiLoginRow: View {
+    @ObservedObject var settings: SettingsStore
+    @ObservedObject private var session = GeminiSessionManager.shared
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Spacing.xs) {
+            HStack {
+                Toggle(isOn: bindingEnabled) {
+                    Text("Google Gemini")
+                        .font(.body)
+                        .fontWeight(.medium)
+                }
+                .toggleStyle(.checkbox)
+
+                Spacer()
+
+                switch session.sessionState {
+                case .loggedIn:
+                    Label("已登录", systemImage: "checkmark.seal.fill")
+                        .foregroundColor(.green)
+                        .font(.caption)
+                case .expired:
+                    Label("登录已过期", systemImage: "exclamationmark.triangle.fill")
+                        .foregroundColor(.orange)
+                        .font(.caption)
+                case .notLoggedIn:
+                    Label("未登录", systemImage: "circle.dashed")
+                        .foregroundColor(.secondary)
+                        .font(.caption)
+                }
+            }
+
+            HStack(spacing: Spacing.xs) {
+                Button(session.sessionState == .loggedIn ? "重新登录" : "登录") {
+                    session.openLoginWindow()
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(!settings.enabledProviders.contains(.gemini))
+
+                if session.sessionState != .notLoggedIn {
+                    Button("退出登录", role: .destructive) {
+                        Task {
+                            await session.logout()
+                            await AppState.shared.refresh()
+                        }
+                    }
+                    .buttonStyle(.bordered)
+                }
+            }
+
+            Text("订阅 Google AI Pro/Ultra 的 Gemini 网页版配额（gemini.google.com/usage），登录一次长期有效，无 API Key")
+                .font(.caption)
+                .foregroundColor(.secondary)
+        }
+        .padding(Spacing.sm)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(Color(NSColor.controlBackgroundColor))
+        )
+    }
+
+    private var bindingEnabled: Binding<Bool> {
+        Binding(
+            get: { settings.enabledProviders.contains(.gemini) },
+            set: { newValue in
+                if newValue {
+                    settings.enabledProviders.insert(.gemini)
+                } else {
+                    settings.enabledProviders.remove(.gemini)
+                }
+            }
+        )
     }
 }
 

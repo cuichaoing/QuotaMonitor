@@ -69,11 +69,17 @@ public struct MiniMaxProvider: Provider {
         let total = 100.0
         let used = usedPercent
 
-        // resetTime 字段可能不在顶层（在新版本中可能移到 model_remains[i] 里）
-        // 暂时用 5h 默认值，未来根据真实响应再调整
-        let resetAt = KimiProvider.parseResetTime(json["resetTime"])
-            ?? KimiProvider.parseResetTime(primary["interval_end_time"])
-            ?? Date().addingTimeInterval(5 * 3600)
+        // 【重置时间修正 v1.1.1】此前找的是不存在的字段（resetTime / interval_end_time），
+        // 一律落到「抓取时刻 + 5h」兜底 → 倒计时永远显示 4 小时 59 分，与服务端窗口无关。
+        // 真实响应（2026-10-29 实测）里窗口结束时刻是这三个字段：
+        //   end_time        当前 5h 窗口结束时刻（毫秒时间戳，绝对时间，优先）
+        //   remains_time    当前窗口剩余毫秒（相对时间，次选）
+        //   weekly_end_time 周窗口结束时刻（毫秒时间戳）
+        let now = Date()
+        let resetAt = Self.epochMillis(primary["end_time"])
+            ?? Self.relativeMillis(primary["remains_time"], from: now)
+            ?? KimiProvider.parseResetTime(json["resetTime"])
+            ?? now.addingTimeInterval(5 * 3600)
 
         let window = QuotaWindow(
             total: total,
@@ -82,11 +88,42 @@ public struct MiniMaxProvider: Provider {
             displayName: "5h"
         )
 
+        // 周窗口（真实响应里有，之前完全没用上）：weekly_end_time + current_weekly_remaining_percent
+        let weeklyWindow: QuotaWindow? = {
+            guard let weeklyReset = Self.epochMillis(primary["weekly_end_time"]),
+                  let weeklyRemaining = KimiProvider.numericValue(primary["current_weekly_remaining_percent"])
+            else { return nil }
+            return QuotaWindow(
+                total: 100,
+                used: max(0, min(100, 100 - weeklyRemaining)),
+                resetAt: weeklyReset,
+                displayName: "7d"
+            )
+        }()
+
         return ProviderQuota(
             provider: kind,
-            capturedAt: Date(),
+            capturedAt: now,
             primaryWindow: window,
+            weeklyWindow: weeklyWindow,
             raw: json
         )
+    }
+
+    // MARK: - Helpers
+
+    /// 毫秒时间戳 → Date（MiniMax 用 13 位毫秒；兼容 10 位秒）
+    static func epochMillis(_ any: Any?) -> Date? {
+        guard let ms = KimiProvider.numericValue(any) else { return nil }
+        // 10 位 = 秒，13 位 = 毫秒
+        let seconds = ms > 1_000_000_000_000 ? ms / 1000 : ms
+        guard seconds > 0 else { return nil }
+        return Date(timeIntervalSince1970: seconds)
+    }
+
+    /// 剩余毫秒 → Date（相对时间兜底）
+    static func relativeMillis(_ any: Any?, from now: Date) -> Date? {
+        guard let ms = KimiProvider.numericValue(any), ms > 0 else { return nil }
+        return now.addingTimeInterval(ms / 1000)
     }
 }

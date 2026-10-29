@@ -43,13 +43,27 @@ public struct ProviderCardView: View {
             if let window = quota?.primaryWindow {
                 QuotaProgressBar(percent: window.usedPercent)
                 CountdownLabel(resetAt: window.resetAt)
+
+                // 副窗口（Gemini 每周限额；其他平台有则同样展示）
+                if let weekly = quota?.weeklyWindow {
+                    HStack(spacing: Spacing.xs) {
+                        Text(weekly.displayName)
+                            .font(Typography.caption)
+                            .foregroundColor(SemanticColors.secondary)
+                        ProgressView(value: weekly.usedPercent, total: 100)
+                            .progressViewStyle(.linear)
+                        Text("\(Int(weekly.usedPercent.rounded()))%")
+                            .font(Typography.caption.monospacedDigit())
+                            .foregroundColor(SemanticColors.secondary)
+                    }
+                }
             } else if let error = error {
                 Text(error.localizedDescription)
                     .font(Typography.caption)
                     .foregroundColor(SemanticColors.secondary)
                     .lineLimit(2)
             } else {
-                Text("未配置 API Key")
+                Text(kind == .gemini ? "未登录网页版（设置 → 登录）" : "未配置 API Key")
                     .font(Typography.caption)
                     .foregroundColor(SemanticColors.secondary)
             }
@@ -81,6 +95,8 @@ public struct ProviderCardView: View {
         case .cancelled:       return "取消"
         case .mockDisabled:    return "mock"
         case .unknown:         return "?"
+        case .sessionMissing:  return "未登录"
+        case .sessionExpired:  return "登录过期"
         }
     }
 }

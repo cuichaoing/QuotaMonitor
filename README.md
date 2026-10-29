@@ -5,18 +5,22 @@
 [![Swift: 5.9+](https://img.shields.io/badge/Swift-5.9%2B-orange.svg)](https://swift.org)
 [![Tests: 110/110](https://img.shields.io/badge/tests-110%2F110%20passing-brightgreen.svg)](#单元测试)
 
-macOS 状态栏原生应用，实时监控 Kimi Code / MiniMax / 智谱 GLM 三大 AI 平台的 5 小时滚动配额百分比、剩余量与重置倒计时。
+macOS 状态栏原生应用，实时监控 Kimi Code / MiniMax / 智谱 GLM / **Google Gemini** 四大 AI 平台的配额百分比、剩余量与重置倒计时。
+
+前三家走 API Key；Gemini 无 API Key，走 Google 网页登录会话（订阅配额）。
 
 ---
 
 ## 截图
 
 > 应用启动后驻留在状态栏，点击图标展开下拉面板。
-> 状态栏显示格式：`K 35 M 60 G 12`（K/M/G 分别为 Kimi/MiniMax/GLM，后面跟已用百分比）
+> 状态栏显示格式：`K 35 M 60 G 12 Z 31`（K=Kimi，M=MiniMax，G=Google Gemini，Z=智谱 GLM，后面跟已用百分比）
+> **全绿时自动进入安静模式**：只显示绿色数字（`35 60 12 31`），不带平台字母；
+> 任何一个平台进入红色档（打满 100%）时，字母回归，并在该数字后附括号倒计时（`K 100 (1h56m)`）
 > 数字颜色按最高已用百分比切换：< 阈值 绿 / 阈值~严重 黄 / 严重~危险 橙 / ≥ 危险 红
 > （阈值可在"设置 → 颜色阈值"调节，**支持 slider 拖动 + 数字框直接输入**）
 
-**状态栏**：实时显示三平台已用百分比，颜色随最高百分比变化。
+**状态栏**：实时显示四平台已用百分比；全绿时只留数字（安静模式），非全绿时带平台字母，红色档附重置倒计时。
 
 ![状态栏](docs/screenshots/menubar.png)
 
@@ -35,7 +39,7 @@ macOS 状态栏原生应用，实时监控 Kimi Code / MiniMax / 智谱 GLM 三�
 | 模块 | 实现 |
 |------|------|
 | 状态栏极简面板 | 单数字 + 颜色状态（绿/黄/橙/红） |
-| 三平台并行查询 | actor + withTaskGroup，平均 200ms 内完成 |
+| 四平台并行查询 | actor + withTaskGroup（API Key 三家）+ 网页会话一家 |
 | 智能节流轮询 | 30s 活跃 / 1m 普通 / 5m 空闲 / 暂停于系统休眠 |
 | 阈值可调 | slider + 数字框双向同步，实时改变状态栏颜色 |
 | Keychain 安全存储 | `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly` |
@@ -43,7 +47,8 @@ macOS 状态栏原生应用，实时监控 Kimi Code / MiniMax / 智谱 GLM 三�
 | 系统通知告警 | UNUserNotificationCenter 3 级 + 5h 窗口去重 |
 | Bark 远程推送 | iOS 端轻量 HTTP 推送（可选） |
 | 数据平滑 | 防 MiniMax 被动流失导致 UI 闪烁 |
-| 设置面板 | API Key 管理 + 阈值调节 + 频率微调 + Bark 配置 |
+| Gemini 网页登录 | 内嵌浏览器登一次即长期有效，5 分钟独立限频抓取 |
+| 设置面板 | API Key 管理 + Gemini 登录 + 阈值调节 + 频率微调 + Bark 配置 |
 
 ---
 

@@ -110,9 +110,12 @@ public final class SettingsStore: ObservableObject {
         case configured
     }
 
-    /// 查询某平台是否已配置 Key
+    /// 查询某平台是否已配置 Key（Gemini 为网页会话型，判据是登录态而非 Keychain）
     public func keyState(for kind: ProviderKind) -> KeyState {
-        keychain.exists(for: kind) ? .configured : .notConfigured
+        if kind == .gemini {
+            return GeminiSessionManager.shared.sessionState == .loggedIn ? .configured : .notConfigured
+        }
+        return keychain.exists(for: kind) ? .configured : .notConfigured
     }
 
     /// 保存 API Key（明文只在内存中，不进日志）

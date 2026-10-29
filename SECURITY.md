@@ -22,7 +22,8 @@
 
 - **API Key**：仅存储于 macOS Keychain（`kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`），从不写日志、不上传到任何服务器
 - **Bark 推送**：可选功能，设备 Key 由用户主动配置
-- **网络请求**：仅向 Kimi / MiniMax / 智谱 GLM 三大平台官方 API 发起（端点见 README）
+- **网络请求**：仅向 Kimi / MiniMax / 智谱 GLM 三大平台官方 API，以及 Google Gemini 官方站点（`gemini.google.com`）发起（端点见 README）
+- **Gemini 登录会话**：用户主动在应用内嵌浏览器登录 Google 账号，凭证由 Google 直接写入本机 WebKit 存储（本应用不读取、不导出、不上传任何 cookie 或账号信息）；抓取时只解析用量页的两个数值块，不落整页内容
 - **遥测**：本应用无任何第三方分析、统计、追踪 SDK
 
 ## 已知安全特性

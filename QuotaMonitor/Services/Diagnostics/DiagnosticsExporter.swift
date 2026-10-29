@@ -147,6 +147,8 @@ public enum DiagnosticsExporter {
         case .mockDisabled: return "mockDisabled"
         case .cancelled: return "cancelled"
         case .unknown: return "unknown"
+        case .sessionMissing: return "sessionMissing"
+        case .sessionExpired: return "sessionExpired"
         }
     }
 
@@ -186,6 +188,15 @@ public enum DiagnosticsExporter {
                 "detail.used": detail["used"] ?? NSNull(),
                 "detail.limit": detail["limit"] ?? NSNull()
             ]
+        case .gemini:
+            // 网页会话型：raw 由 GeminiSessionManager 组装（DOM 提取结果 + 页面 URL 状态）
+            var d: [String: Any] = [:]
+            for key in ["currentUsedPercent", "currentResetText",
+                        "weeklyUsedPercent", "weeklyResetText",
+                        "currentWidthPercent", "finalURL"] {
+                if let v = raw[key] { d[key] = v }
+            }
+            return d.isEmpty ? nil : d
         }
     }
 

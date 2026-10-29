@@ -18,6 +18,10 @@ public enum QuotaError: LocalizedError, Sendable {
     case mockDisabled(ProviderKind)
     case cancelled
     case unknown(ProviderKind, underlying: String)
+    /// 网页会话型平台（Gemini）：尚未登录
+    case sessionMissing(ProviderKind)
+    /// 网页会话型平台（Gemini）：登录已过期，需重新登录
+    case sessionExpired(ProviderKind)
 
     public var errorDescription: String? {
         switch self {
@@ -45,6 +49,10 @@ public enum QuotaError: LocalizedError, Sendable {
             return "已取消"
         case .unknown(let p, let u):
             return "\(p.displayName) 未知错误：\(u)"
+        case .sessionMissing(let p):
+            return "\(p.displayName) 尚未登录网页版"
+        case .sessionExpired(let p):
+            return "\(p.displayName) 登录已过期，请重新登录"
         }
     }
 
@@ -52,6 +60,10 @@ public enum QuotaError: LocalizedError, Sendable {
     public var isRetryable: Bool {
         switch self {
         case .rateLimited, .networkUnreachable:
+            return true
+        case .sessionExpired:
+            // 过期后每轮仍可重试：Google 侧会话偶尔自愈（如其他设备续期），
+            // 重试成本受 GeminiSessionManager 的 5 分钟抓取下限约束
             return true
         case .serverError(_, let code, _):
             return code >= 500
@@ -63,7 +75,7 @@ public enum QuotaError: LocalizedError, Sendable {
     /// 是否用户可操作（Key 缺失 / 无效），需引导去设置页
     public var isUserActionable: Bool {
         switch self {
-        case .keyMissing, .keyInvalid:
+        case .keyMissing, .keyInvalid, .sessionMissing, .sessionExpired:
             return true
         default:
             return false

@@ -4,6 +4,72 @@ QuotaMonitor 版本变更历史。
 
 ---
 
+## [1.1.1] - 2026-10-29
+
+**修复：MiniMax 重置倒计时一直是假的 + 状态栏形态调整 + 平台字母重命名**
+
+### 修复
+
+- **MiniMax 重置时间不准确（用户反馈：实际 1h56m 后恢复，App 显示「4 小时 59 分」）**：
+  `MiniMaxProvider` 此前找的是**不存在的字段**（顶层 `resetTime` / `interval_end_time`），
+  永远落到 `Date() + 5h` 兜底 —— 所谓倒计时只是「抓取时刻 + 5 小时」，与服务端窗口无关。
+  真实响应（2026-10-29 实测）里窗口结束时刻是 `end_time`（毫秒时间戳），
+  另有 `remains_time`（剩余毫秒）互证。修复后按 `end_time` → `remains_time` → 旧字段 → 兜底
+  四级优先取真实重置时刻。同时接入此前完全没用的**周窗口**
+  （`weekly_end_time` + `current_weekly_remaining_percent` → `weeklyWindow`）
+- **Kimi / GLM 未受影响**：Kimi 用 `detail.resetTime`（ISO 串）、GLM 用 `nextResetTime`（毫秒时间戳），均已核对为真实服务端时间
+
+### 新增
+
+- **状态栏安静模式**：四平台全绿时只显示绿色数字（`35 60 12 31`），不带平台字母；任一平台非绿（黄/橙/红/失败/未配置）则字母回归
+- **打满 100% 时附倒计时**：红色档平台的数字后追加括号倒计时（`K 100 (1h56m)`），倒计时取该平台窗口重置时刻，紧凑格式 `1h56m / 45m / 12s`
+- **`MenuBarTitlePlan`**：状态栏渲染方案抽成纯函数（可单测），渲染留在控制器
+
+### 变更
+
+- **平台字母重命名**：`GLM` 的 `G` → `Z`（智谱 Zhipu）；`Gemini` 的 `X` → `G`（Google Gemini）
+- **状态栏顺序**：K → M → G → Z（Gemini 移到 GLM 前，字母读起来顺）
+- Gemini 周窗口标签 `每周` → `7d`（与 MiniMax 周窗口统一）
+
+### 测试
+
+- `swift test` → 160/160 通过（新增 9 条：MiniMax 重置时间回归 3 条、状态栏方案 5 条、字母与排序 1 条）
+
+---
+
+## [1.1.0] - 2026-10-29
+
+**新平台：Google Gemini（订阅网页版配额，第 4 个监控目标）** — 无 API Key，走 Google 网页登录会话。
+
+### 新增
+
+- **`ProviderKind.gemini`**：状态栏第 4 段 `X`（`K 35 M 60 G 12 X 31`），排序在 GLM 之后
+- **`GeminiSessionManager`**（`Services/WebSession/`）：网页会话型平台的完整链路
+  - 登录窗口：App 内嵌 WKWebView → Google 账号登录（含两步验证）→ 认证 cookie 持久化在 App 专属 WebKit 存储，长期免登录
+  - 隐藏抓取 WebView：常驻复用，每轮加载 `gemini.google.com/usage`，等 DOM 渲染出 `[data-testid="current-usage"]` 后提取
+  - 会话状态机：`notLoggedIn / loggedIn / expired`，过期自动降级 + 系统通知引导重登
+  - 频率下限 5 分钟（独立于三平台的 30s–5m 智能节流，避免高频打 Google）
+- **`GeminiUsageParser`**（纯函数）：解析两个用量块 → `已使用 X%` + `重置时间`
+  - 主选择器 `data-testid`（Google 自家测试锚点，比 utility class 稳定）
+  - 候选链兜底：`已使用 X%` 文本 → 进度条内联样式 `--x-width: X%`（语言无关）
+  - 重置时间解析：`13:01`（当天/次日）、`11月2日16:01`（月日+时刻，跨年回退）
+- **模型映射**：`current-usage` → `primaryWindow`（状态栏主数字 + 倒计时），`weekly-usage` → `weeklyWindow`（Popup 副窗口）
+- **`QuotaError.sessionMissing / sessionExpired`**：会话型错误，用户可操作（引导去设置页重登）
+- **设置面板**：Gemini 行改为「登录 / 重新登录 / 退出登录」，显示登录状态徽标
+
+### 选型记录（关键经验）
+
+- **WKWebView 内嵌 Google 登录可行**：必须伪装完整桌面 **Safari** UA（`AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.6.2 Safari/605.1.15`）。用 Chrome UA 会被 Google 判「此浏览器或应用不安全」——WKWebView 里没有 `window.chrome`、不发 client-hints，特征自相矛盾；Safari UA 下 WKWebView 与真 Safari 同引擎同 TLS 栈，登录可完整走通（含两步验证）
+- **登录判据必须是认证 cookie**（`SID/SSID/HSID/SAPISID`）：登录墙页面本身也在 `gemini.google.com` 域上，只看域名会误报「登录成功」
+- **数据不在初始 HTML**：Gemini 是 React SPA，必须等 DOM 渲染完再提取；未登录时 `/usage` 被 JS 软跳到 `/app`（HTTP 200，不跳账号域），靠 cookie + 路径双判据识别
+- **NSWindow 释放时序**：登录窗口自动关闭时，若在 `windowWillClose` 里立刻释放引用，会踩 AppKit 窗口关闭动画未结束导致的过度释放（`-[_NSWindowTransformAnimation dealloc]` 崩溃）；改为延迟 0.5s 释放，并对多次导航触发的自动关窗做去重
+
+### 测试
+
+- `swift test` → 151/151 通过（新增 15 条：真实 DOM 夹具解析 11 条 + 会话通道分流 4 条）
+
+---
+
 ## [1.0.12] - 2026-06-20
 
 **Bug 修复：Pop 菜单数字卡在打开时刻（状态栏新、Pop 旧，稳定分裂）** — 详见 `docs/incident-reports/2026-06-20-popup-vs-menubar-unverified.md`（注：原报告标题误标"unverified"，实际根因已定位并修复）。

@@ -83,3 +83,6 @@ scripts/monitor.sh
 deliverables/
 scripts/pdf_generate_*.py
 scripts/mermaid-config.json
+
+# AgentForge 本地同步清单（不是项目代码）
+.af_sync_manifest.json

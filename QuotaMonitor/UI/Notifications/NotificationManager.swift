@@ -85,6 +85,22 @@ public final class NotificationManager: NSObject, @unchecked Sendable {
         }
     }
 
+    /// 投递一条普通提示（非配额告警，如 Gemini 会话过期）
+    public func sendPlain(title: String, body: String) async {
+        let status = await currentAuthorizationStatus()
+        guard status == .authorized || status == .provisional else { return }
+
+        let content = UNMutableNotificationContent()
+        content.title = title
+        content.body = body
+        content.sound = .default
+        let request = UNNotificationRequest(
+            identifier: "qm.\(title).\(Int(Date().timeIntervalSince1970 / 3600))",
+            content: content,
+            trigger: nil)
+        try? await center.add(request)
+    }
+
     // MARK: - 私有
 
     private func body(for event: AlertEvent) -> String {

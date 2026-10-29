@@ -201,4 +201,89 @@ final class MiniMaxProviderTests: XCTestCase {
 
         _ = try await MiniMaxProvider().fetchQuota(apiKey: "my-coding-plan-key", using: client)
     }
+
+    // MARK: - 重置时间（v1.1.1 修正）
+
+    /// 真实响应（2026-10-29 实测）含毫秒时间戳字段：
+    ///   end_time = 当前 5h 窗口结束时刻 / remains_time = 窗口剩余毫秒
+    ///   weekly_end_time = 周窗口结束时刻 / current_weekly_remaining_percent = 周剩余百分比
+    private let realMiniMaxJsonWithTimes = """
+    {
+        "model_remains": [
+            {
+                "model_name": "general",
+                "start_time": 1793268000000,
+                "end_time": 1793286000000,
+                "remains_time": 12093519,
+                "current_interval_total_count": 0,
+                "current_interval_usage_count": 0,
+                "current_interval_remaining_percent": 99,
+                "current_interval_status": 1,
+                "current_weekly_total_count": 0,
+                "current_weekly_usage_count": 0,
+                "weekly_start_time": 1792972800000,
+                "weekly_end_time": 1793577600000,
+                "weekly_remains_time": 303693519,
+                "current_weekly_status": 3,
+                "current_weekly_remaining_percent": 100
+            }
+        ],
+        "base_resp": {"status_msg": "success", "status_code": 0}
+    }
+    """
+
+    /// 【关键回归】重置时间必须来自服务端 end_time，而不是「抓取时刻 + 5h」
+    func testResetTime_usesServerEndTime_notNowPlusFiveHours() async throws {
+        MockURLProtocol.handler = { req in
+            MockURLProtocol.jsonResponse(url: req.url!, json: self.realMiniMaxJsonWithTimes)
+        }
+
+        let quota = try await MiniMaxProvider().fetchQuota(apiKey: "k", using: client)
+        let resetAt = try XCTUnwrap(quota.primaryWindow?.resetAt)
+
+        // end_time = 1793286000000 ms = 1793286000 s
+        XCTAssertEqual(resetAt.timeIntervalSince1970, 1_793_286_000, accuracy: 1)
+
+        // 反向断言：不能是「现在 + 5h」
+        let nowPlusFiveHours = Date().addingTimeInterval(5 * 3600).timeIntervalSince1970
+        XCTAssertNotEqual(resetAt.timeIntervalSince1970, nowPlusFiveHours, accuracy: 60,
+                          "重置时间不能回退到 now+5h 兜底")
+    }
+
+    /// end_time 缺失时用 remains_time（相对毫秒）兜底
+    func testResetTime_fallsBackToRemainsTime() async throws {
+        let json = """
+        {
+            "model_remains": [
+                {
+                    "model_name": "general",
+                    "remains_time": 3600000,
+                    "current_interval_remaining_percent": 50
+                }
+            ],
+            "base_resp": {"status_msg": "success", "status_code": 0}
+        }
+        """
+        MockURLProtocol.handler = { req in
+            MockURLProtocol.jsonResponse(url: req.url!, json: json)
+        }
+
+        let quota = try await MiniMaxProvider().fetchQuota(apiKey: "k", using: client)
+        let resetAt = try XCTUnwrap(quota.primaryWindow?.resetAt)
+        // remains_time = 3600000 ms = 1 小时后
+        XCTAssertEqual(resetAt.timeIntervalSinceNow, 3600, accuracy: 5)
+    }
+
+    /// 周窗口：weekly_end_time + current_weekly_remaining_percent
+    func testWeeklyWindow_parsedFromRealFields() async throws {
+        MockURLProtocol.handler = { req in
+            MockURLProtocol.jsonResponse(url: req.url!, json: self.realMiniMaxJsonWithTimes)
+        }
+
+        let quota = try await MiniMaxProvider().fetchQuota(apiKey: "k", using: client)
+        let weekly = try XCTUnwrap(quota.weeklyWindow)
+        XCTAssertEqual(weekly.displayName, "7d")
+        XCTAssertEqual(weekly.usedPercent, 0, accuracy: 0.001)   // 剩余 100% → 已用 0%
+        XCTAssertEqual(weekly.resetAt.timeIntervalSince1970, 1_793_577_600, accuracy: 1)
+    }
 }

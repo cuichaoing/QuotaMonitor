@@ -10,17 +10,17 @@ import XCTest
 
 final class ProviderKindTests: XCTestCase {
     func testAllCases_count() {
-        XCTAssertEqual(ProviderKind.allCases.count, 3)
+        XCTAssertEqual(ProviderKind.allCases.count, 4)
     }
 
     func testSortOrder_unique() {
         let orders = ProviderKind.allCases.map { $0.sortOrder }
-        XCTAssertEqual(Set(orders).count, 3, "sortOrder 必须唯一")
+        XCTAssertEqual(Set(orders).count, 4, "sortOrder 必须唯一")
     }
 
     func testDisplayNames_unique() {
         let names = ProviderKind.allCases.map { $0.displayName }
-        XCTAssertEqual(Set(names).count, 3, "displayName 必须唯一")
+        XCTAssertEqual(Set(names).count, 4, "displayName 必须唯一")
     }
 
     func testUserAgent_OnlyKimiRequired() {

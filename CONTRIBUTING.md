@@ -72,6 +72,23 @@ test: 为 MenuBarController 添加颜色映射测试
 
 参考现有 3 平台 Provider：`QuotaMonitor/Services/Networking/{Kimi,MiniMax,GLM}Provider.swift`
 
+### 网页会话型平台接入（无 API Key 的形态）
+
+Gemini（订阅网页版）是第二种形态：没有 API Key，靠用户登录网页会话。实现见
+`QuotaMonitor/Services/WebSession/`，与 API Key 型 Provider 并行存在：
+
+- `NetworkingService.fetchOne` 按 `kind == .gemini` 分流，不查 Keychain
+- `GeminiSessionManager`（`@MainActor`）负责登录窗口 + 隐藏抓取 WebView + 会话状态机
+- 抓取结果经 `GeminiUsageParser`（纯函数）解析为 `ProviderQuota` / `QuotaWindow`
+
+**必读陷阱**（Gemini 实测踩坑）：
+
+1. **内嵌浏览器登录 Google 必须伪装成完整桌面 Safari UA**——用 Chrome UA 会因缺 `window.chrome` / client-hints 被判「此浏览器或应用不安全」
+2. **登录判据必须是认证 cookie**（`SID/SSID/HSID/SAPISID`）——登录墙页面本身也在目标域上，只看域名会误报登录成功
+3. **SPA 数据不在初始 HTML**——必须等 DOM 渲染出目标元素再提取，不能固定 sleep
+4. **NSWindow 关闭时序**——在 `windowWillClose` 里立刻释放窗口引用会踩 AppKit 关闭动画导致过度释放崩溃；延迟释放 + 自动关窗去重
+5. **给 WebKit 对象设独立限频**——别跟 API 平台的智能节流走，页面加载比 JSON 请求重得多
+
 ## 发布流程（维护者）
 
 每次发布：

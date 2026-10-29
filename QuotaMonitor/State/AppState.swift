@@ -81,6 +81,9 @@ public final class AppState: ObservableObject {
 
         store.update(snapshots: newSnapshots, errors: newErrors)
 
+        // Gemini 会话异常首报：提醒用户去设置重新登录（节流：1 小时最多一次）
+        await notifyGeminiSessionIssueIfNeeded(newErrors: newErrors)
+
         // 写诊断轨迹（精简：每平台 ok(pct) / err(type)）
         var outcomes: [ProviderKind: DiagProviderOutcome] = [:]
         for kind in target {
@@ -125,6 +128,18 @@ public final class AppState: ObservableObject {
 
         logger.info("refresh done: \(newSnapshots.count) ok, \(newErrors.count) failed, alerts=\(events.count)")
     }
+
+    /// Gemini 会话异常（过期/未登录）首次进入错误态时发系统通知
+    private func notifyGeminiSessionIssueIfNeeded(newErrors: [ProviderKind: QuotaError]) async {
+        guard let err = newErrors[.gemini], err.isUserActionable else { return }
+        let now = Date()
+        if let last = lastGeminiSessionNoticeAt, now.timeIntervalSince(last) < 3600 { return }
+        lastGeminiSessionNoticeAt = now
+        await notifications.sendPlain(
+            title: "QuotaMonitor - Gemini 登录状态异常",
+            body: err.localizedDescription + "。点状态栏图标 → 设置 → 登录 Gemini。")
+    }
+    private var lastGeminiSessionNoticeAt: Date?
 
     // MARK: - Diagnostics Export
 
@@ -180,6 +195,8 @@ public final class AppState: ObservableObject {
         case .unknown: return "unknown"
         case .mockDisabled: return "mockDisabled"
         case .cancelled: return "cancelled"
+        case .sessionMissing: return "sessionMissing"
+        case .sessionExpired: return "sessionExpired"
         }
     }
 }

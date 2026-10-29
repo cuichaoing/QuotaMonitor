@@ -58,4 +58,85 @@ final class MenuBarControllerTests: XCTestCase {
             primaryWindow: QuotaWindow(total: 100, used: used, resetAt: Date(), displayName: "5h")
         )
     }
+
+    // MARK: - 标题渲染方案（v1.1.1）
+
+    /// 全绿 → 安静模式：只显示数字，不带字母
+    func testPlan_allGreen_isQuiet() {
+        let plan = MenuBarTitlePlan(
+            snapshots: [
+                .kimi: makeQuota(used: 20, kind: .kimi),
+                .minimax: makeQuota(used: 30, kind: .minimax),
+                .gemini: makeQuota(used: 10, kind: .gemini),
+                .glm: makeQuota(used: 5, kind: .glm),
+            ],
+            errors: [:], warningThreshold: 75, dangerThreshold: 99)
+        XCTAssertTrue(plan.quiet, "全部绿色时应进入安静模式")
+        XCTAssertEqual(plan.items.count, 4)
+    }
+
+    /// 有平台越过警告阈值 → 字母回归
+    func testPlan_oneYellow_notQuiet() {
+        let plan = MenuBarTitlePlan(
+            snapshots: [
+                .kimi: makeQuota(used: 20, kind: .kimi),
+                .minimax: makeQuota(used: 80, kind: .minimax),
+            ],
+            errors: [:], warningThreshold: 75, dangerThreshold: 99)
+        XCTAssertFalse(plan.quiet)
+    }
+
+    /// 有平台抓取失败 → 字母回归（且显示 !）
+    func testPlan_hasError_notQuiet() {
+        let plan = MenuBarTitlePlan(
+            snapshots: [.kimi: makeQuota(used: 10, kind: .kimi)],
+            errors: [.glm: .networkUnreachable(.glm)],
+            warningThreshold: 75, dangerThreshold: 99)
+        XCTAssertFalse(plan.quiet)
+        XCTAssertTrue(plan.items.contains { if case .failed = $0 { return true } else { return false } })
+    }
+
+    /// 未配置平台（占位）→ 字母回归
+    func testPlan_placeholder_notQuiet() {
+        let plan = MenuBarTitlePlan(
+            snapshots: [.kimi: makeQuota(used: 10, kind: .kimi)],
+            errors: [:], warningThreshold: 75, dangerThreshold: 99)
+        XCTAssertFalse(plan.quiet, "存在未配置平台时不算全绿")
+    }
+
+    /// 打满 100% → isExhausted = true（渲染时附括号倒计时）
+    func testPlan_exhaustedFlag() {
+        let plan = MenuBarTitlePlan(
+            snapshots: [
+                .kimi: makeQuota(used: 100, kind: .kimi),
+                .glm: makeQuota(used: 10, kind: .glm),
+            ],
+            errors: [:], warningThreshold: 75, dangerThreshold: 99)
+        var exhausted: Int?
+        for item in plan.items {
+            if case .value(let kind, let display, _, let isExhausted) = item, kind == .kimi {
+                exhausted = isExhausted ? display : nil
+            }
+        }
+        XCTAssertEqual(exhausted, 100)
+        XCTAssertFalse(plan.quiet)
+    }
+
+    /// 倒计时文案格式
+    func testCompactDuration() {
+        XCTAssertEqual(MenuBarTitlePlan.compactDuration(3600 * 2 + 60 * 56), "2h56m")
+        XCTAssertEqual(MenuBarTitlePlan.compactDuration(3600 * 2), "2h")
+        XCTAssertEqual(MenuBarTitlePlan.compactDuration(60 * 45), "45m")
+        XCTAssertEqual(MenuBarTitlePlan.compactDuration(12), "12s")
+        XCTAssertEqual(MenuBarTitlePlan.compactDuration(-5), "0s")
+    }
+
+    // MARK: - Helper
+
+    private func makeQuota(used: Double, kind: ProviderKind = .glm) -> ProviderQuota {
+        ProviderQuota(
+            provider: kind,
+            primaryWindow: QuotaWindow(total: 100, used: used, resetAt: Date(), displayName: "5h")
+        )
+    }
 }

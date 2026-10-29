@@ -86,3 +86,6 @@ scripts/mermaid-config.json
 
 # AgentForge 本地同步清单（不是项目代码）
 .af_sync_manifest.json
+
+# 发布说明的 PDF 产物（不入库，随交付分发）
+docs/releases/*.pdf

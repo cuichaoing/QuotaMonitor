@@ -257,14 +257,34 @@ public enum VolcengineProvider {
 
     // MARK: - Helpers
 
-    /// 兼容秒/毫秒/字符串时间戳。秒级（< 1e12）自动乘 1000；<= 0 视为无重置时间。
+    /// 兼容秒 / 毫秒 / ISO8601 字符串时间戳。
+    ///
+    /// [BUG-2026-11-07-01] 旧实现的单位判断条件**写反了**：
+    ///   `ms < 1e12 ? ms / 1000 : ms`
+    /// 把 13 位毫秒当成秒用（→ 公元 5 万多年），又把 10 位秒当毫秒用（→ 落到 1970 年）。
+    /// 线上症状：火山 5h 配额用光后，状态栏显示「497849573 小时 53 分」，
+    /// popup 显示「重置于 6,712年11个月」。
+    ///
+    /// 正确规则（与 MiniMaxProvider.epochMillis 一致）：
+    ///   ≥1e12（13 位）= 毫秒 → /1000；<1e12（10 位）= 秒 → 原样使用。
+    /// 火山两个接口单位本就不同：GetAFPUsage 的 ResetTime 是毫秒，
+    /// GetCodingPlanUsage 的 ResetTimestamp 是秒，必须两边都对。
     private static func extractResetTime(_ any: Any?) -> Date? {
-        if let s = any as? String {
-            return KimiProvider.parseResetTime(s)
+        // 1) ISO8601 字符串（注意：纯数字字符串要留给第 2 步，ISO8601 解析它必然失败）
+        if let s = any as? String, let d = KimiProvider.parseResetTime(s) {
+            return plausibleResetDate(d)
         }
-        guard let ms = KimiProvider.numericValue(any) else { return nil }
-        guard ms > 0 else { return nil }
-        let seconds = ms < 1_000_000_000_000 ? ms / 1000 : ms
-        return Date(timeIntervalSince1970: seconds)
+        // 2) 数字 / 数字字符串：13 位 = 毫秒，10 位 = 秒
+        guard let v = KimiProvider.numericValue(any), v > 0 else { return nil }
+        let seconds = v >= 1_000_000_000_000 ? v / 1000 : v
+        return plausibleResetDate(Date(timeIntervalSince1970: seconds))
+    }
+
+    /// 纵深防御：重置时刻若远在未来（> 60 天），说明时间戳单位又被误判（或服务端返回异常值）。
+    /// 此时返回 nil，由调用方退回「N 小时后重置」兜底，
+    /// 杜绝「几万年 / 6,712 年」这类会误导用户的病态倒计时。
+    private static func plausibleResetDate(_ date: Date) -> Date? {
+        guard date.timeIntervalSinceNow <= 60 * 24 * 3600 else { return nil }
+        return date
     }
 }

@@ -9,7 +9,7 @@ on:
 jobs:
   test:
     name: Swift Test on macOS
-    runs-on: macos-14
+    runs-on: macos-15   # macos-14 arm64 已退役
     timeout-minutes: 10
 
     steps:

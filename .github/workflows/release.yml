@@ -12,7 +12,7 @@ permissions:
 jobs:
   release:
     name: Build + Publish Release
-    runs-on: macos-14
+    runs-on: macos-15   # macos-14 已退役（只剩 Intel x64，无 arm64）；arm64 构建用 macos-15
     timeout-minutes: 30
 
     steps:

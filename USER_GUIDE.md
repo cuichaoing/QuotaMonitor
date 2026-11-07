@@ -1,6 +1,6 @@
 # QuotaMonitor 用户使用指南
 
-macOS 状态栏原生应用，监控 Kimi / MiniMax / GLM / Google Gemini 四大 AI 平台配额（Gemini 为订阅网页版，无 API Key）。
+macOS 状态栏原生应用，监控 Kimi / MiniMax / GLM / Google Gemini / 火山方舟 Volcengine 五大 AI 平台配额（Gemini 为订阅网页版无 API Key；Volcengine 为控制面 OpenAPI + AK/SK 签名）。
 
 ---
 
@@ -44,6 +44,7 @@ open Package.swift
 | Kimi Code | 月之暗面编程套餐 | https://kimi.com → 设置 → API Key |
 | MiniMax | MiniMax 编程套餐 | https://platform.minimax.io → Coding Plan |
 | 智谱 GLM | 智谱 AI 编程套餐 | https://bigmodel.cn → API Keys |
+| 火山方舟 Volcengine | 火山 Agent Plan（AFP 积分） | https://console.volcengine.com/iam/keymanage → Access Key ID + Secret Access Key（控制面 OpenAPI 签名，与推理 API Key 是两套凭据） |
 
 操作步骤：
 1. 在对应平台行填写 Key
@@ -95,10 +96,10 @@ iPhone 接收推送：
 ### 3.1 状态栏数字
 
 ```
-K 35 M 60 G 12 Z 31
+K 35 M 60 G 12 Z 31 V 33
 ```
 
-- `K` = Kimi，`M` = MiniMax，`G` = Google Gemini，`Z` = 智谱 GLM
+- `K` = Kimi，`M` = MiniMax，`G` = Google Gemini，`Z` = 智谱 GLM，`V` = 火山方舟 Volcengine
 - 后面数字 = 已用百分比
 - **全绿（都低于黄色阈值）时**：只显示数字，不带字母 —— `35 60 12 31`
 - **有平台打满 100%（红色）时**：字母回来，且红色数字后带括号倒计时 —— `K 100 (1h56m)`

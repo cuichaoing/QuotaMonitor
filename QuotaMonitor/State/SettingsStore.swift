@@ -115,7 +115,48 @@ public final class SettingsStore: ObservableObject {
         if kind == .gemini {
             return GeminiSessionManager.shared.sessionState == .loggedIn ? .configured : .notConfigured
         }
+        if kind == .volcengine {
+            // 火山需要 AK+SK 两个凭证，JSON 存 Keychain
+            guard let raw = try? keychain.read(for: .volcengine),
+                  let data = raw.data(using: .utf8),
+                  let json = try? JSONSerialization.jsonObject(with: data) as? [String: String],
+                  let ak = json["ak"], let sk = json["sk"],
+                  !ak.isEmpty, !sk.isEmpty else {
+                return .notConfigured
+            }
+            return .configured
+        }
         return keychain.exists(for: kind) ? .configured : .notConfigured
+    }
+
+    /// 保存火山 AK+SK（以 JSON 串存 Keychain，account="volcengine"）
+    public func saveVolcengineCredentials(ak: String, sk: String) throws {
+        let trimmedAk = ak.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedSk = sk.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedAk.isEmpty, !trimmedSk.isEmpty else {
+            throw QuotaError.keyMissing(.volcengine)
+        }
+        let json = "{\"ak\":\"\(trimmedAk)\",\"sk\":\"\(trimmedSk)\"}"
+        try keychain.save(json, for: .volcengine)
+        logger.info("[volcengine] AK/SK saved")
+    }
+
+    /// 读取火山 AK+SK
+    public func readVolcengineCredentials() throws -> (ak: String, sk: String)? {
+        guard let raw = try keychain.read(for: .volcengine),
+              let data = raw.data(using: .utf8),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: String],
+              let ak = json["ak"], let sk = json["sk"],
+              !ak.isEmpty, !sk.isEmpty else {
+            return nil
+        }
+        return (ak, sk)
+    }
+
+    /// 删除火山 AK+SK
+    public func deleteVolcengineCredentials() throws {
+        try keychain.delete(for: .volcengine)
+        logger.info("[volcengine] AK/SK deleted")
     }
 
     /// 保存 API Key（明文只在内存中，不进日志）

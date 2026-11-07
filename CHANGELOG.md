@@ -4,6 +4,35 @@ QuotaMonitor 版本变更历史。
 
 ---
 
+## [1.2.0] - 2026-11-07
+
+**新平台：火山方舟 Volcengine Agent Plan（第 5 个监控目标）** — 控制面 OpenAPI + AK/SK V4 签名。
+
+### 新增
+
+- **`ProviderKind.volcengine`**：状态栏第 5 段 `V`（`K M G Z V`），排序在智谱 Z 之后
+- **`VolcengineSigner`**（CryptoKit）：火山引擎 V4 签名（HMAC-SHA256）。算法是 AWS SigV4 的火山变体，两处致命差异：
+  1. canonical headers 固定顺序 `host;x-date;x-content-sha256;content-type`（不按字母序）；
+  2. algorithm 串 `HMAC-SHA256`（无 `AWS4` 前缀）、credential scope 结尾 `request`（非 `aws4_request`）、签名密钥 `kDate=HMAC(SK, date)`（SK 不加 `AWS4` 前缀）
+- **`VolcengineProvider`**：
+  - 端点 `POST https://open.volcengineapi.com/?Action=GetAFPUsage&Region=cn-beijing&Version=2024-01-01`（控制面网关，**不是**数据面推理域名 `ark.cn-beijing.volces.com`）
+  - 主窗口 `AFPFiveHour.{Quota, Used, ResetTime}`，已用% = Used/Quota×100；副窗口 `AFPWeekly`（7d）
+  - 降级链：AFPFiveHour Quota<=0（未订阅 Agent Plan）→ 再调 `GetCodingPlanUsage`（QuotaUsage 数组，Level=session/weekly/monthly）
+- **双凭证**：AK + SK 两套凭据，以 JSON 串存 Keychain（account=`volcengine`），与推理 API Key 完全分离
+- **设置面板**：Volcengine 行两个输入框（Access Key ID / Secret Access Key），IAM 密钥管理页获取
+
+### 选型记录（关键经验）
+
+- **火山用量查询无「API Key 直查」公开端点**：官方途径只有 Ark CLI / 控制台网页 / AI 追问。实现参照开源项目 CC Switch（farion1231/cc-switch）的 Rust 实现 `src-tauri/src/services/coding_plan.rs`，端点与签名算法逐字对照
+- **签名 bug**：canonical headers 块与 signed headers 之间必须空一行（SigV4 规范），漏一个换行 → 网关返 401 `SignatureDoesNotMatch`。已用独立 Swift 小程序拿真实凭证验证 200 后才打包
+- **不手动设 Host 头**：URLSession 从 URL 自动设，手动塞会导致重复头
+
+### 测试
+
+- `swift test` → 166/166 通过（新增 6 条：签名确定性 3 条 + AFP 解析 3 条，含官方 GetAFPUsage 响应例子夹具）
+
+---
+
 ## [1.1.1] - 2026-10-29
 
 **修复：MiniMax 重置倒计时一直是假的 + 状态栏形态调整 + 平台字母重命名**

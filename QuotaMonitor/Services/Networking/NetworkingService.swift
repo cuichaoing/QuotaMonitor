@@ -81,6 +81,28 @@ public actor NetworkingService {
                 self.lastSnapshot[kind] = smoothed
                 return .success(smoothed)
             }
+            // 火山方舟：控制面 OpenAPI + AK/SK V4 签名，不走数据面 Bearer Key
+            // AK+SK 以 JSON 串存 Keychain（account="volcengine"），最小侵入现有 KeychainStore
+            if kind == .volcengine {
+                guard let raw = try keychain.read(for: .volcengine),
+                      let data = raw.data(using: .utf8),
+                      let json = try? JSONSerialization.jsonObject(with: data) as? [String: String],
+                      let ak = json["ak"], let sk = json["sk"],
+                      !ak.isEmpty, !sk.isEmpty else {
+                    throw QuotaError.keyMissing(.volcengine)
+                }
+                // 数据面 base_url 写死默认值（region 从中提取 = cn-beijing）
+                let dataBaseURL = "https://ark.cn-beijing.volces.com/api/plan/v3"
+                let rawQuota = try await VolcengineProvider.fetchQuota(
+                    accessKeyId: ak,
+                    secretAccessKey: sk,
+                    dataBaseURL: dataBaseURL,
+                    using: httpClient
+                )
+                let smoothed = applySmoothing(rawQuota, kind: kind)
+                self.lastSnapshot[kind] = smoothed
+                return .success(smoothed)
+            }
             guard let key = try keychain.read(for: kind), !key.isEmpty else {
                 throw QuotaError.keyMissing(kind)
             }

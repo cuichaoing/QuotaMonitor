@@ -5,7 +5,7 @@
 [![Swift: 5.9+](https://img.shields.io/badge/Swift-5.9%2B-orange.svg)](https://swift.org)
 [![Tests: 110/110](https://img.shields.io/badge/tests-110%2F110%20passing-brightgreen.svg)](#单元测试)
 
-macOS 状态栏原生应用，实时监控 Kimi Code / MiniMax / 智谱 GLM / **Google Gemini** 四大 AI 平台的配额百分比、剩余量与重置倒计时。
+macOS 状态栏原生应用，实时监控 Kimi Code / MiniMax / 智谱 GLM / **Google Gemini** / **火山方舟 Volcengine** 五大 AI 平台的配额百分比、剩余量与重置倒计时。
 
 前三家走 API Key；Gemini 无 API Key，走 Google 网页登录会话（订阅配额）。
 
@@ -14,13 +14,13 @@ macOS 状态栏原生应用，实时监控 Kimi Code / MiniMax / 智谱 GLM / **
 ## 截图
 
 > 应用启动后驻留在状态栏，点击图标展开下拉面板。
-> 状态栏显示格式：`K 35 M 60 G 12 Z 31`（K=Kimi，M=MiniMax，G=Google Gemini，Z=智谱 GLM，后面跟已用百分比）
+> 状态栏显示格式：`K 35 M 60 G 12 Z 31 V 33`（K=Kimi，M=MiniMax，G=Google Gemini，Z=智谱 GLM，V=火山方舟 Volcengine，后面跟已用百分比）
 > **全绿时自动进入安静模式**：只显示绿色数字（`35 60 12 31`），不带平台字母；
 > 任何一个平台进入红色档（打满 100%）时，字母回归，并在该数字后附括号倒计时（`K 100 (1h56m)`）
 > 数字颜色按最高已用百分比切换：< 阈值 绿 / 阈值~严重 黄 / 严重~危险 橙 / ≥ 危险 红
 > （阈值可在"设置 → 颜色阈值"调节，**支持 slider 拖动 + 数字框直接输入**）
 
-**状态栏**：实时显示四平台已用百分比；全绿时只留数字（安静模式），非全绿时带平台字母，红色档附重置倒计时。
+**状态栏**：实时显示五平台已用百分比；全绿时只留数字（安静模式），非全绿时带平台字母，红色档附重置倒计时。
 
 ![状态栏](docs/screenshots/menubar.png)
 
@@ -39,7 +39,7 @@ macOS 状态栏原生应用，实时监控 Kimi Code / MiniMax / 智谱 GLM / **
 | 模块 | 实现 |
 |------|------|
 | 状态栏极简面板 | 单数字 + 颜色状态（绿/黄/橙/红） |
-| 四平台并行查询 | actor + withTaskGroup（API Key 三家）+ 网页会话一家 |
+| 五平台并行查询 | actor + withTaskGroup（API Key 三家 + 火山 AK/SK 签名）+ 网页会话一家 |
 | 智能节流轮询 | 30s 活跃 / 1m 普通 / 5m 空闲 / 暂停于系统休眠 |
 | 阈值可调 | slider + 数字框双向同步，实时改变状态栏颜色 |
 | Keychain 安全存储 | `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly` |
@@ -89,6 +89,8 @@ open build/QuotaMonitor.app
 | Kimi Code | https://kimi.com → 设置 → API Key |
 | MiniMax | https://platform.minimax.io → Coding Plan → Key |
 | 智谱 GLM | https://bigmodel.cn → API Keys |
+| Google Gemini | 设置面板点「登录」走 Google 账号（无 API Key） |
+| 火山方舟 Volcengine | https://console.volcengine.com/iam/keymanage → Access Key ID + Secret Access Key（控制面 OpenAPI 签名，与推理 API Key 是两套凭据） |
 
 填完点击"保存"即可。Key 存到 macOS Keychain，重启不会丢。
 **显示已保存的 Key 需要身份验证**（Touch ID / Apple Watch / 系统密码）。

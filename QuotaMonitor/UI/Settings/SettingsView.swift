@@ -73,6 +73,8 @@ public struct SettingsView: View {
             ForEach(ProviderKind.allCases.sorted(by: { $0.sortOrder < $1.sortOrder }), id: \.self) { kind in
                 if kind == .gemini {
                     GeminiLoginRow(settings: settings)
+                } else if kind == .volcengine {
+                    VolcengineKeyRow(settings: settings)
                 } else {
                     ProviderKeyRow(kind: kind, settings: settings)
                 }
@@ -290,6 +292,105 @@ private struct GeminiLoginRow: View {
                 }
             }
         )
+    }
+}
+
+// MARK: - VolcengineKeyRow（火山 AK/SK 双凭证）
+
+private struct VolcengineKeyRow: View {
+    @ObservedObject var settings: SettingsStore
+    @State private var akInput: String = ""
+    @State private var skInput: String = ""
+    @State private var error: String?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Spacing.xs) {
+            HStack {
+                Toggle(isOn: bindingEnabled) {
+                    Text("Volcengine")
+                        .font(.body)
+                        .fontWeight(.medium)
+                }
+                .toggleStyle(.checkbox)
+
+                Spacer()
+
+                if settings.keyState(for: .volcengine) == .configured {
+                    Label("已配置", systemImage: "checkmark.seal.fill")
+                        .labelStyle(.titleAndIcon)
+                        .foregroundColor(.green)
+                        .font(.caption)
+                }
+            }
+
+            VStack(alignment: .leading, spacing: Spacing.xs) {
+                HStack(spacing: Spacing.xs) {
+                    SecureField("Access Key ID", text: $akInput)
+                        .textFieldStyle(.roundedBorder)
+                        .disabled(!settings.enabledProviders.contains(.volcengine))
+                    Button("保存", action: save)
+                        .buttonStyle(.borderedProminent)
+                        .disabled(akInput.isEmpty || skInput.isEmpty || !settings.enabledProviders.contains(.volcengine))
+                    if settings.keyState(for: .volcengine) == .configured {
+                        Button("删除", role: .destructive, action: delete)
+                            .buttonStyle(.bordered)
+                    }
+                }
+                SecureField("Secret Access Key", text: $skInput)
+                    .textFieldStyle(.roundedBorder)
+                    .disabled(!settings.enabledProviders.contains(.volcengine))
+            }
+
+            if let err = error {
+                Text(err)
+                    .font(.caption)
+                    .foregroundColor(.red)
+            }
+
+            Text("火山方舟 Agent Plan 控制 OpenAPI 鉴权（IAM 获取 AK/SK，与推理 API Key 是两套凭据）")
+                .font(.caption)
+                .foregroundColor(.secondary)
+        }
+        .padding(Spacing.sm)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(Color(NSColor.controlBackgroundColor))
+        )
+    }
+
+    private var bindingEnabled: Binding<Bool> {
+        Binding(
+            get: { settings.enabledProviders.contains(.volcengine) },
+            set: { newValue in
+                if newValue {
+                    settings.enabledProviders.insert(.volcengine)
+                } else {
+                    settings.enabledProviders.remove(.volcengine)
+                }
+            }
+        )
+    }
+
+    private func save() {
+        do {
+            try settings.saveVolcengineCredentials(ak: akInput, sk: skInput)
+            akInput = ""
+            skInput = ""
+            error = nil
+            Task { await AppState.shared.refresh() }
+        } catch {
+            self.error = "保存失败: \(error.localizedDescription)"
+        }
+    }
+
+    private func delete() {
+        do {
+            try settings.deleteVolcengineCredentials()
+            error = nil
+            Task { await AppState.shared.refresh() }
+        } catch {
+            self.error = "删除失败: \(error.localizedDescription)"
+        }
     }
 }
 

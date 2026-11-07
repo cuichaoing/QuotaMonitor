@@ -197,6 +197,39 @@ public enum DiagnosticsExporter {
                 if let v = raw[key] { d[key] = v }
             }
             return d.isEmpty ? nil : d
+        case .volcengine:
+            // 控制面 OpenAPI：提炼 AFPFiveHour / AFPWeekly 的 Quota/Used/ResetTime
+            guard let result = raw["Result"] as? [String: Any] ?? (raw["AFPFiveHour"] != nil ? raw : nil) else {
+                return nil
+            }
+            var d: [String: Any] = [:]
+            if let fiveHour = result["AFPFiveHour"] as? [String: Any] {
+                d["AFPFiveHour"] = [
+                    "Quota": fiveHour["Quota"] ?? NSNull(),
+                    "Used": fiveHour["Used"] ?? NSNull(),
+                    "ResetTime": fiveHour["ResetTime"] ?? NSNull(),
+                ]
+            }
+            if let weekly = result["AFPWeekly"] as? [String: Any] {
+                d["AFPWeekly"] = [
+                    "Quota": weekly["Quota"] ?? NSNull(),
+                    "Used": weekly["Used"] ?? NSNull(),
+                ]
+            }
+            if let planType = result["PlanType"] as? String {
+                d["PlanType"] = planType
+            }
+            // 降级路径：Coding Plan 的 QuotaUsage 数组
+            if d.isEmpty, let quotaUsage = raw["Result"] as? [String: Any],
+               let arr = quotaUsage["QuotaUsage"] as? [[String: Any]] {
+                d["QuotaUsage"] = arr.map { item in
+                    [
+                        "Level": item["Level"] ?? NSNull(),
+                        "Percent": item["Percent"] ?? NSNull(),
+                    ]
+                }
+            }
+            return d.isEmpty ? nil : d
         }
     }
 

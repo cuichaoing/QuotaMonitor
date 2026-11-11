@@ -22,17 +22,21 @@ public actor NetworkingService {
     /// Gemini 网页会话通道（非 API Key 型）。nil = 运行时用默认单例，
     /// 惰性解析避免在 init（任意线程）里触碰 @MainActor 单例
     private let geminiSessionOverride: GeminiSessionProviding?
+    /// 百度千帆网页会话通道（非 API Key 型），同上
+    private let baiduSessionOverride: BaiduSessionProviding?
     private let logger = Logger(subsystem: "app.quotamonitor", category: "Networking")
     private var lastSnapshot: [ProviderKind: ProviderQuota] = [:]
 
     public init(
         keychain: KeychainStoreType = KeychainStore.shared,
         httpClient: HTTPClient = .shared,
-        geminiSession: GeminiSessionProviding? = nil
+        geminiSession: GeminiSessionProviding? = nil,
+        baiduSession: BaiduSessionProviding? = nil
     ) {
         self.keychain = keychain
         self.httpClient = httpClient
         self.geminiSessionOverride = geminiSession
+        self.baiduSessionOverride = baiduSession
         self.providers = [
             .kimi:    KimiProvider(),
             .minimax: MiniMaxProvider(),
@@ -75,6 +79,19 @@ public actor NetworkingService {
                     session = override
                 } else {
                     session = await GeminiSessionManager.shared
+                }
+                let raw = try await session.fetchQuota()
+                let smoothed = applySmoothing(raw, kind: kind)
+                self.lastSnapshot[kind] = smoothed
+                return .success(smoothed)
+            }
+            // 百度千帆：网页会话型，走百度账号登录 + 控制台「我的订阅」页抓取，不分流 Keychain/HTTPClient
+            if kind == .baidu {
+                let session: BaiduSessionProviding
+                if let override = baiduSessionOverride {
+                    session = override
+                } else {
+                    session = await BaiduSessionManager.shared
                 }
                 let raw = try await session.fetchQuota()
                 let smoothed = applySmoothing(raw, kind: kind)

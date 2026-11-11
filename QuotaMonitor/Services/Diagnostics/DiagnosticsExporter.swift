@@ -132,7 +132,11 @@ public enum DiagnosticsExporter {
 
     private static func errorDict(_ err: QuotaError) -> [String: Any] {
         var d: [String: Any] = ["status": "error", "error": errorType(err)]
+        // [v1.3.0] decodingFailed 的 underlying 一并导出：
+        // 网页会话型（Gemini / 百度千帆）失败时，underlying 里带页面原文片段，
+        // 是定位「为什么没抓到」的唯一线索（status 栏只有一行摘要）。
         if case .networkUnreachable(_, let u?) = err { d["underlying"] = u }
+        if case .decodingFailed(_, let u) = err { d["underlying"] = u }
         return d
     }
 
@@ -228,6 +232,13 @@ public enum DiagnosticsExporter {
                         "Percent": item["Percent"] ?? NSNull(),
                     ]
                 }
+            }
+            return d.isEmpty ? nil : d
+        case .baidu:
+            // 网页会话型：raw 由 BaiduSessionManager 组装（剩余/总量/重置时间）
+            var d: [String: Any] = [:]
+            for key in ["remaining", "total", "remainPercent", "resetAtText", "snippet"] {
+                if let v = raw[key] { d[key] = v }
             }
             return d.isEmpty ? nil : d
         }

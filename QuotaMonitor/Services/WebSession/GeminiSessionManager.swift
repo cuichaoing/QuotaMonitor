@@ -60,8 +60,10 @@ public final class GeminiSessionManager: NSObject, ObservableObject {
     /// 隐藏抓取 WebView（懒创建，常驻复用，避免每轮重建的冷启动开销）
     private var fetchWebView: WKWebView?
     private var offscreenWindow: NSWindow?
-    /// 登录窗口强引用（开着期间保命）
+    /// 登录窗口强引用（开着期间保命）。【v1.3.0】窗口**永不释放**，只复用
     private var loginWindow: NSWindow?
+    /// 登录窗里的 WebView（复用窗口时用它重新加载目标页）
+    private var loginWebView: WKWebView?
     /// 自动关窗去重标志：登录流程会连续触发多次 didFinish（/app → ogs widget → …），
     /// 每次都排一个 Task 关闭窗口会导致「同一窗口被关两次」→ NSWindow 过度释放崩溃
     private var loginAutoCloseScheduled = false
@@ -90,9 +92,15 @@ public final class GeminiSessionManager: NSObject, ObservableObject {
     /// 打开可见登录窗口：用户在里面完成 Google 登录（含两步验证），
     /// 落回 gemini.google.com 域即判定会话建立，自动关窗。
     public func openLoginWindow() {
-        if loginWindow != nil {
-            loginWindow?.makeKeyAndOrderFront(nil)
+        if let win = loginWindow {
+            // 【BUG-2026-11-11-01/02】窗口**复用**而不是重建：
+            // 旧实现关闭后把 loginWindow 置 nil，等于 release 一个 AppKit 可能已释放的
+            // NSWindow → objc_release 野指针 → EXC_BAD_ACCESS 崩主线程（实测两次）。
+            // 现在永不释放窗口，只重新加载目标页（cookie 仍在同一 WKWebsiteDataStore）。
+            loginWebView?.load(URLRequest(url: Self.usageURL))
+            win.makeKeyAndOrderFront(nil)
             NSApp.activate(ignoringOtherApps: true)
+            loginAutoCloseScheduled = false
             return
         }
 
@@ -113,6 +121,7 @@ public final class GeminiSessionManager: NSObject, ObservableObject {
         window.contentView?.addSubview(webView)
         window.delegate = self
         self.loginWindow = window
+        self.loginWebView = webView
 
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
@@ -280,19 +289,31 @@ public final class GeminiSessionManager: NSObject, ObservableObject {
 
     // MARK: - 私有工具
 
-    /// 隐藏 WebView：挂在 1x1 离屏窗口上（不进任何 view hierarchy 也能加载，
-    /// 挂窗口是部分系统版本上 WKWebView 稳定渲染的保险做法）
+    /// 隐藏 WebView：挂在**屏幕内**的 1x1 窗口上。
+    ///
+    /// [BUG-2026-11-11-05] 原实现挂在 (-2000,-2000) 的离屏窗口上，
+    /// 但 **macOS 不合成屏幕外窗口 → WebKit 可能不渲染 SPA**：
+    /// 实测千帆控制台同一页面 innerText 在离屏时只有 165 字符（骨架），
+    /// 放屏幕内则是 1541 字符、能完整读到内容。Gemini 同样存在此风险，一并加固。
+    /// 窗口：屏幕右下角、1x1 像素、alpha 0.02、orderBack 不激活、不吃鼠标事件 —— 用户无感。
     private func ensureFetchWebView() -> WKWebView {
         if let existing = fetchWebView { return existing }
         let config = WKWebViewConfiguration()
         config.websiteDataStore = dataStore
-        let webView = WKWebView(frame: NSRect(x: 0, y: 0, width: 1280, height: 720), configuration: config)
+        let webView = WKWebView(frame: NSRect(x: 0, y: 0, width: 480, height: 360), configuration: config)
         webView.customUserAgent = Self.userAgent
 
+        let screen = NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
+        // 窗口保持**完整尺寸**（contentView 会裁剪子视图 —— 窗口只有 2x2 时 webView 被裁到 2x2 就不渲染了），
+        // 只把**位置**挪到屏幕右缘之外，屏幕内仅露出 2px 窄条
         let window = NSWindow(
-            contentRect: NSRect(x: -2000, y: -2000, width: 1280, height: 720),
+            contentRect: NSRect(x: screen.maxX - 2, y: screen.minY, width: 480, height: 360),
             styleMask: [.borderless], backing: .buffered, defer: false)
         window.contentView = webView
+        window.alphaValue = 0.02
+        window.ignoresMouseEvents = true
+        window.isReleasedWhenClosed = false
+        window.orderBack(nil)
         offscreenWindow = window
 
         fetchWebView = webView
@@ -399,14 +420,11 @@ extension GeminiSessionManager: WKNavigationDelegate, WKUIDelegate, NSWindowDele
     /// -[_NSWindowTransformAnimation dealloc] → objc_release 过度释放）。
     /// 延迟到下一个 runloop 之后再释放，动画已收尾。
     public func windowWillClose(_ notification: Notification) {
-        guard (notification.object as? NSWindow) === loginWindow else { return }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
-            guard let self else { return }
-            if (notification.object as? NSWindow) === self.loginWindow {
-                self.loginWindow = nil
-            }
-            self.loginAutoCloseScheduled = false
-        }
+        // 【关键 · BUG-2026-11-11-01/02】这里**绝不释放窗口**：
+        // 实测两次 EXC_BAD_ACCESS @ objc_release —— 崩在延迟闭包执行 `self.loginWindow = nil`
+        // 时，release 的是 AppKit 可能已释放的 NSWindow（野指针）。
+        // 改为：窗口保持存活，下次 openLoginWindow 复用（重新 load 目标页）。
+        loginAutoCloseScheduled = false
     }
 }
 

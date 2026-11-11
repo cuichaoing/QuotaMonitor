@@ -79,6 +79,9 @@ docs/handoff_*.md
 # 本地监控脚本（避免 Co-Authored-By 污染 Contributors）
 scripts/monitor.sh
 
+# 配额闸门节点发布器（本地基建，引用 ~/.claude 本地路径，不入公开库）
+scripts/qg_publish_qm.py
+
 # 本地一次性报告生成脚本与中间产物
 deliverables/
 scripts/pdf_generate_*.py

@@ -13,14 +13,21 @@
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>1.2.1</string>
+	<string>1.3.0</string>
 	<key>CFBundleVersion</key>
-	<string>63</string>
+	<string>64</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>13.0</string>
 	<key>LSUIElement</key>
 	<true/>
 	<key>NSHighResolutionCapable</key>
 	<true/>
+	<key>NSUserDefaults</key>
+	<dict>
+		<key>WebKitPasswordAutoFillEnabled</key>
+		<false/>
+		<key>WebKitPasswordAutosaveEnabled</key>
+		<false/>
+	</dict>
 </dict>
 </plist>

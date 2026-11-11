@@ -16,6 +16,8 @@ public enum ProviderKind: String, CaseIterable, Codable, Sendable {
     case gemini
     /// 火山方舟 Agent Plan：控制面 OpenAPI + AK/SK V4 签名（不走数据面 Bearer Key）
     case volcengine
+    /// 百度千帆 Token Plan：网页会话型，走百度账号登录 + 控制台「我的订阅」页抓取（BaiduSessionManager）
+    case baidu
 
     public var displayName: String {
         switch self {
@@ -24,6 +26,7 @@ public enum ProviderKind: String, CaseIterable, Codable, Sendable {
         case .glm:        return "Zhipu GLM"
         case .gemini:     return "Google Gemini"
         case .volcengine: return "Volcengine"
+        case .baidu:      return "百度千帆"
         }
     }
 
@@ -34,6 +37,7 @@ public enum ProviderKind: String, CaseIterable, Codable, Sendable {
         case .gemini:     return "G"   // Google Gemini
         case .glm:        return "Z"   // 智谱 Zhipu（原用 G，与 Gemini 冲突，v1.1.1 改名）
         case .volcengine: return "V"   // 火山 Volcengine
+        case .baidu:      return "B"   // 百度千帆 Baidu Qianfan
         }
     }
 
@@ -44,6 +48,7 @@ public enum ProviderKind: String, CaseIterable, Codable, Sendable {
         case .glm:        return URL(string: "https://api.z.ai")!
         case .gemini:     return URL(string: "https://gemini.google.com")!
         case .volcengine: return URL(string: "https://open.volcengineapi.com")!
+        case .baidu:      return URL(string: "https://console.bce.baidu.com/qianfan/resource/token-plan")!
         }
     }
 
@@ -55,6 +60,7 @@ public enum ProviderKind: String, CaseIterable, Codable, Sendable {
         case .gemini:     return 2   // G（Google）
         case .glm:        return 3   // Z（智谱）
         case .volcengine: return 4   // V（火山）
+        case .baidu:      return 5   // B（百度千帆）
         }
     }
 

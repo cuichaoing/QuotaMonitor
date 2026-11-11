@@ -14,6 +14,13 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
     private var menuBarController: MenuBarController?
 
     public func applicationDidFinishLaunching(_ notification: Notification) {
+        // 0. 关闭 WebKit 的密码自动填充/保存（必须在任何 WebView 创建之前）
+        //    [BUG-2026-11-12-01] WKWebView 里的登录表单会自动访问 macOS 钥匙串，
+        //    弹出的 SecurityAgent 授权框在无头/后台场景下点不动、会挂住整个登录流程。
+        //    我们只用 cookie 维持会话，不需要 WebKit 碰钥匙串。
+        UserDefaults.standard.set(false, forKey: "WebKitPasswordAutosaveEnabled")
+        UserDefaults.standard.set(false, forKey: "WebKitPasswordAutoFillEnabled")
+
         // 1. 启动菜单栏
         menuBarController = MenuBarController(appState: appState)
 

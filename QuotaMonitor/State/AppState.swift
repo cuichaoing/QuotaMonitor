@@ -45,8 +45,13 @@ public final class AppState: ObservableObject {
         scheduler.start()
 
         // 异步：请求通知权限 + 第一次刷新
+        // [BUG-2026-11-12-02] 通知权限请求**不能挡在刷新前面**：
+        // UNUserNotificationCenter.requestAuthorization 在用户未决定时会**一直挂起**
+        // 等系统弹窗响应（没人点就永远不返回）→ 首次 refresh 永不执行，
+        // 结果是 app 启动了却一个平台都没数据（网页型平台连抓取 WebView 都不会创建）。
+        // → 权限请求放到独立 Task 里，不阻塞刷新。
         Task {
-            _ = await notifications.requestPermission()
+            Task { _ = await notifications.requestPermission() }
             await refresh()
         }
     }

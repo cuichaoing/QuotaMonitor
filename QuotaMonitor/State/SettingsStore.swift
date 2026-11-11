@@ -115,6 +115,9 @@ public final class SettingsStore: ObservableObject {
         if kind == .gemini {
             return GeminiSessionManager.shared.sessionState == .loggedIn ? .configured : .notConfigured
         }
+        if kind == .baidu {
+            return BaiduSessionManager.shared.sessionState == .loggedIn ? .configured : .notConfigured
+        }
         if kind == .volcengine {
             // 火山需要 AK+SK 两个凭证，JSON 存 Keychain
             guard let raw = try? keychain.read(for: .volcengine),

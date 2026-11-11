@@ -73,6 +73,8 @@ public struct SettingsView: View {
             ForEach(ProviderKind.allCases.sorted(by: { $0.sortOrder < $1.sortOrder }), id: \.self) { kind in
                 if kind == .gemini {
                     GeminiLoginRow(settings: settings)
+                } else if kind == .baidu {
+                    BaiduLoginRow(settings: settings)
                 } else if kind == .volcengine {
                     VolcengineKeyRow(settings: settings)
                 } else {
@@ -289,6 +291,83 @@ private struct GeminiLoginRow: View {
                     settings.enabledProviders.insert(.gemini)
                 } else {
                     settings.enabledProviders.remove(.gemini)
+                }
+            }
+        )
+    }
+}
+
+// MARK: - BaiduLoginRow（网页会话型：无 API Key，走百度账号登录）
+
+private struct BaiduLoginRow: View {
+    @ObservedObject var settings: SettingsStore
+    @ObservedObject private var session = BaiduSessionManager.shared
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Spacing.xs) {
+            HStack {
+                Toggle(isOn: bindingEnabled) {
+                    Text("百度千帆")
+                        .font(.body)
+                        .fontWeight(.medium)
+                }
+                .toggleStyle(.checkbox)
+
+                Spacer()
+
+                switch session.sessionState {
+                case .loggedIn:
+                    Label("已登录", systemImage: "checkmark.seal.fill")
+                        .foregroundColor(.green)
+                        .font(.caption)
+                case .expired:
+                    Label("登录已过期", systemImage: "exclamationmark.triangle.fill")
+                        .foregroundColor(.orange)
+                        .font(.caption)
+                case .notLoggedIn:
+                    Label("未登录", systemImage: "circle.dashed")
+                        .foregroundColor(.secondary)
+                        .font(.caption)
+                }
+            }
+
+            HStack(spacing: Spacing.xs) {
+                Button(session.sessionState == .loggedIn ? "重新登录" : "登录") {
+                    session.openLoginWindow()
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(!settings.enabledProviders.contains(.baidu))
+
+                if session.sessionState != .notLoggedIn {
+                    Button("退出登录", role: .destructive) {
+                        Task {
+                            await session.logout()
+                            await AppState.shared.refresh()
+                        }
+                    }
+                    .buttonStyle(.bordered)
+                }
+            }
+
+            Text("订阅百度千帆 Token Plan 的月套餐配额（控制台「我的订阅」页），登录一次长期有效，无 API Key")
+                .font(.caption)
+                .foregroundColor(.secondary)
+        }
+        .padding(Spacing.sm)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(Color(NSColor.controlBackgroundColor))
+        )
+    }
+
+    private var bindingEnabled: Binding<Bool> {
+        Binding(
+            get: { settings.enabledProviders.contains(.baidu) },
+            set: { newValue in
+                if newValue {
+                    settings.enabledProviders.insert(.baidu)
+                } else {
+                    settings.enabledProviders.remove(.baidu)
                 }
             }
         )

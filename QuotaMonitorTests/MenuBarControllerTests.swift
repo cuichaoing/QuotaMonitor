@@ -70,10 +70,11 @@ final class MenuBarControllerTests: XCTestCase {
                 .gemini: makeQuota(used: 10, kind: .gemini),
                 .glm: makeQuota(used: 5, kind: .glm),
                 .volcengine: makeQuota(used: 15, kind: .volcengine),
+                .baidu: makeQuota(used: 12, kind: .baidu),
             ],
             errors: [:], warningThreshold: 75, dangerThreshold: 99)
         XCTAssertTrue(plan.quiet, "全部绿色时应进入安静模式")
-        XCTAssertEqual(plan.items.count, 5)
+        XCTAssertEqual(plan.items.count, 6)
     }
 
     /// 有平台越过警告阈值 → 字母回归

@@ -77,13 +77,15 @@ final class GeminiSessionTests: XCTestCase {
     /// 状态栏字母：K=Kimi M=MiniMax G=Google Gemini Z=智谱 GLM
     func testProviderKind_lettersAndOrder() {
         let sorted = ProviderKind.allCases.sorted { $0.sortOrder < $1.sortOrder }
-        XCTAssertEqual(sorted, [.kimi, .minimax, .gemini, .glm, .volcengine])
+        XCTAssertEqual(sorted, [.kimi, .minimax, .gemini, .glm, .volcengine, .baidu])
         XCTAssertEqual(ProviderKind.kimi.shortName, "K")
         XCTAssertEqual(ProviderKind.minimax.shortName, "M")
         XCTAssertEqual(ProviderKind.gemini.shortName, "G")
         XCTAssertEqual(ProviderKind.glm.shortName, "Z")
         XCTAssertEqual(ProviderKind.volcengine.shortName, "V")
+        XCTAssertEqual(ProviderKind.baidu.shortName, "B")
         XCTAssertEqual(ProviderKind.gemini.displayName, "Google Gemini")
         XCTAssertEqual(ProviderKind.volcengine.displayName, "Volcengine")
+        XCTAssertEqual(ProviderKind.baidu.displayName, "百度千帆")
     }
 }

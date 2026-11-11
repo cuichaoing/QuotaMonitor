@@ -4,6 +4,39 @@ QuotaMonitor 版本变更历史。
 
 ---
 
+## [1.3.0] - 2026-11-12
+
+**新平台：百度千帆 Token Plan（第 6 个监控目标）** — 状态栏 `K M G Z V B`，网页会话型（控制台「我的订阅」页抓取）。
+
+### 新增
+
+- **`ProviderKind.baidu`**：状态栏第 6 段 `B`（「百度千帆」），排序在火山 V 之后
+- **`BaiduSessionManager`**（WebKit）：可见登录窗（百度账号）+ 隐藏 WebView 抓取 + cookie 持久化 + 会话状态机 + 5 分钟限频
+- **`BaiduUsageParser`**：千帆是**包月总量制**（非 5h 滚动窗口）——「剩余 665,463,337 / 总量 700,000,000 Token」+「2026-12-11 14:51:08 重置」→ 映射为单窗口（`used = 总量 − 剩余`，displayName「月」）
+- **设置面板**：百度千帆行（网页登录型，无 API Key）
+
+### 选型记录（关键经验）
+
+- **千帆 Token Plan 没有公开的「套餐余量」API**（穷尽排查）：千帆 API 文档全部 **424 个页面**只有 vdb 免费额度与服务调用明细导出；数据面 7 个 `/limits` `/usage` 候选路径全 404；控制面 95 组 Action×Service 盲探全 404；社区参照实现 CC Switch 的 Token Plan 模板（Kimi/GLM/MiniMax/火山/OpenCode/CommandCode）也不含千帆 → **只能走控制台网页抓取**
+- **AK/SK 无法查余量**：用户提供的 `bce-v3/<AK>/<SK>` 签名有效（探测返回路由层 404 而非鉴权错误），但仅能调模型/账单，查不到 Token Plan 套餐余量
+
+### Bug 修复（本次迭代踩的 6 个坑）
+
+- **BUG-2026-11-11-01/02 登录窗关闭必崩**：`windowWillClose` 的延迟闭包里 `self.loginWindow = nil` 会 release 一个 AppKit 可能已释放的 NSWindow → `objc_BAD_ACCESS` @ `objc_release` 崩主线程（实测两次）。→ 改为**窗口永不释放**，复用同一窗口 + 同一 WebView（cookie 不受影响）
+- **BUG-2026-11-11-03 WKWebView cookie 不落盘**：macOS 上**非沙盒** app 的 WebKit 不持久化 cookie（`~/Library/WebKit/app.quotamonitor/…/Cookies` 恒为 0 字节）→ 每次重启都要重新登录。→ 自己把 cookie 导出到 `~/Library/Application Support/QuotaMonitor/baidu_cookies.json` 并在启动时灌回
+- **BUG-2026-11-11-04 登录判据永远不成立**：千帆控制台是 SPA，数据靠 JS 渲染，`didFinish` 触发时只有骨架、渲染完成**不再触发 didFinish** → 改为 didFinish 后**轮询等待**；且**不按 cookie 名判登录**（BDUSS 是通行证域的，console 域是另一套）
+- **BUG-2026-11-11-05 离屏窗口不渲染 SPA**：**macOS 不合成屏幕外窗口** → WebKit 不渲染 → `innerText` 只剩 165 字符骨架。实测同一页面屏幕内 1541 字符。→ 抓取窗口改为**完整尺寸 + 位置挪到屏幕右缘外**（露出 2px）；另注意 `contentView` 会裁剪子视图，窗口尺寸必须 ≥ webView
+- **BUG-2026-11-11-06 同进程多 WebView 抢资源**：登录窗与抓取窗同时加载重 SPA 会互相干扰 → 登录成功后卸载登录页（`about:blank`）；抓取时检测「渲染停滞」自动 reload
+- **BUG-2026-11-12-01 钥匙串授权弹窗点不动**：WebKit 的密码自动填充会触发 SecurityAgent 授权框，而它依附的窗口在屏幕外 → 用户无法点击。→ 在 Info.plist 的 `NSUserDefaults` 字典禁用 `WebKitPasswordAutosaveEnabled` / `WebKitPasswordAutoFillEnabled`
+
+### 测试
+
+- `BaiduUsageParserTests` 10 个用例，其中含**探针实抓的真实页面文案**（剩余 665,463,337 / 总量 700,000,000 / 重置 2026-12-11 14:51:08）
+- 独立探针程序（注入 cookie 复刻抓取）验证：app 的确切窗口配置 **3 次独立进程全部命中**
+- 179/179 全过（`swift test`，~0.55s）
+
+---
+
 ## [1.2.1] - 2026-11-07
 
 **Bug 修复：火山方舟 5h 配额用光后，倒计时显示「497849573 小时」「重置于 6,712年11个月」**

@@ -27,7 +27,8 @@ QuotaMonitor 版本变更历史。
 - **BUG-2026-11-11-04 登录判据永远不成立**：千帆控制台是 SPA，数据靠 JS 渲染，`didFinish` 触发时只有骨架、渲染完成**不再触发 didFinish** → 改为 didFinish 后**轮询等待**；且**不按 cookie 名判登录**（BDUSS 是通行证域的，console 域是另一套）
 - **BUG-2026-11-11-05 离屏窗口不渲染 SPA**：**macOS 不合成屏幕外窗口** → WebKit 不渲染 → `innerText` 只剩 165 字符骨架。实测同一页面屏幕内 1541 字符。→ 抓取窗口改为**完整尺寸 + 位置挪到屏幕右缘外**（露出 2px）；另注意 `contentView` 会裁剪子视图，窗口尺寸必须 ≥ webView
 - **BUG-2026-11-11-06 同进程多 WebView 抢资源**：登录窗与抓取窗同时加载重 SPA 会互相干扰 → 登录成功后卸载登录页（`about:blank`）；抓取时检测「渲染停滞」自动 reload
-- **BUG-2026-11-12-01 钥匙串授权弹窗点不动**：WebKit 的密码自动填充会触发 SecurityAgent 授权框，而它依附的窗口在屏幕外 → 用户无法点击。→ 在 Info.plist 的 `NSUserDefaults` 字典禁用 `WebKitPasswordAutosaveEnabled` / `WebKitPasswordAutoFillEnabled`
+- **BUG-2026-11-12-01 钥匙串授权弹窗点不动，且会阻塞整个 app**：WebKit 密码自动填充因页面存在 `<input type=password>` 而访问 macOS 钥匙串 → 弹 SecurityAgent 授权框。该框是 **app-modal**，一旦弹出 app 就进入 modal session → **MainActor 被挂起 → refresh 永不执行**（实测：杀掉弹窗后 app 立刻恢复抓取，cookie mtime 同步跳动）。→ 根治：抓取 WebView 注入脚本把页面里的 password input 全部改成 text，让 WebKit 认不出（Gemini 同理，其登录页必有 password input）；另在 Info.plist 的 `NSUserDefaults` 里禁 `WebKitPasswordAutosaveEnabled` / `WebKitPasswordAutoFillEnabled`
+- **BUG-2026-11-12-02 通知权限请求挡在首次刷新前**：`UNUserNotificationCenter.requestAuthorization` 在用户**未决定**时一直挂起等系统弹窗响应 → `bootstrap()` 里排在 `await refresh()` 之前 → **首次刷新被饿死，app 启动后一个平台都不抓**。→ 权限请求挪进独立 Task，不阻塞刷新
 
 ### 测试
 

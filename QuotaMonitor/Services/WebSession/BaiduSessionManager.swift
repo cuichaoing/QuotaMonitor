@@ -394,10 +394,36 @@ public final class BaiduSessionManager: NSObject, ObservableObject {
     /// → 千帆控制台这种重 SPA 在离屏窗口里永远抓不到用量。
     /// 现在：窗口放在屏幕右下角、1x1 像素、alpha 0.02、orderBack 不激活、
     /// ignoresMouseEvents 不吃鼠标事件 —— 视觉与交互上无感，但确实在屏幕内。
+    /// 注入脚本：屏蔽页面里的密码输入框。
+    ///
+    /// [BUG-2026-11-12-01 根治] WebKit 的密码自动填充会因页面里存在 `<input type=password>`
+    /// 而去访问 macOS 钥匙串 → 弹 SecurityAgent 授权框。该框是 **app-modal**，
+    /// 一旦弹出，app 就进入 modal session → **MainActor 被挂起 → refresh 永不执行**
+    /// （实测：杀掉弹窗后 app 立刻恢复抓取）。
+    /// 控制台页面即使已登录，DOM 里仍可能残留隐藏的登录框 → 统统改成 text，让 WebKit 认不出。
+    private static let suppressPasswordInputs = """
+    (function(){
+      function scrub(){
+        try {
+          document.querySelectorAll('input[type="password"]').forEach(function(el){
+            el.setAttribute('type', 'text');
+            el.removeAttribute('autocomplete');
+            el.setAttribute('data-quotamonitor-noautofill', '1');
+          });
+        } catch(e) {}
+      }
+      scrub();
+      document.addEventListener('DOMContentLoaded', scrub);
+      new MutationObserver(function(){ scrub(); }).observe(document.documentElement || document, {childList:true, subtree:true});
+    })();
+    """
+
     private func ensureFetchWebView() -> WKWebView {
         if let existing = fetchWebView { return existing }
         let config = WKWebViewConfiguration()
         config.websiteDataStore = dataStore
+        config.userContentController.addUserScript(
+            WKUserScript(source: Self.suppressPasswordInputs, injectionTime: .atDocumentStart, forMainFrameOnly: false))
         let webView = WKWebView(frame: NSRect(x: 0, y: 0, width: 480, height: 360), configuration: config)
         webView.customUserAgent = Self.userAgent
 

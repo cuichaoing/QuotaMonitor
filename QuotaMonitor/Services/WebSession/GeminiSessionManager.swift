@@ -296,10 +296,32 @@ public final class GeminiSessionManager: NSObject, ObservableObject {
     /// 实测千帆控制台同一页面 innerText 在离屏时只有 165 字符（骨架），
     /// 放屏幕内则是 1541 字符、能完整读到内容。Gemini 同样存在此风险，一并加固。
     /// 窗口：屏幕右下角、1x1 像素、alpha 0.02、orderBack 不激活、不吃鼠标事件 —— 用户无感。
+    /// 注入脚本：屏蔽页面里的密码输入框。
+    /// [BUG-2026-11-12-01 根治] WebKit 密码自动填充 → 钥匙串授权框（app-modal）→ MainActor 挂起
+    /// → refresh 永不执行。Google 登录页必有 password input，必须屏蔽。
+    private static let suppressPasswordInputs = """
+    (function(){
+      function scrub(){
+        try {
+          document.querySelectorAll('input[type="password"]').forEach(function(el){
+            el.setAttribute('type', 'text');
+            el.removeAttribute('autocomplete');
+            el.setAttribute('data-quotamonitor-noautofill', '1');
+          });
+        } catch(e) {}
+      }
+      scrub();
+      document.addEventListener('DOMContentLoaded', scrub);
+      new MutationObserver(function(){ scrub(); }).observe(document.documentElement || document, {childList:true, subtree:true});
+    })();
+    """
+
     private func ensureFetchWebView() -> WKWebView {
         if let existing = fetchWebView { return existing }
         let config = WKWebViewConfiguration()
         config.websiteDataStore = dataStore
+        config.userContentController.addUserScript(
+            WKUserScript(source: Self.suppressPasswordInputs, injectionTime: .atDocumentStart, forMainFrameOnly: false))
         let webView = WKWebView(frame: NSRect(x: 0, y: 0, width: 480, height: 360), configuration: config)
         webView.customUserAgent = Self.userAgent
 

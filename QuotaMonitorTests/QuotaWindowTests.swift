@@ -45,4 +45,23 @@ final class QuotaWindowTests: XCTestCase {
         XCTAssertEqual(a, b)
         XCTAssertNotEqual(a, c)
     }
+
+    func testExpectedPercentByElapsedPeriod_weekly() {
+        let sevenDays: TimeInterval = 7 * 24 * 3600
+        let resetAt = Date(timeIntervalSince1970: 1_800_000_000)
+        let w = QuotaWindow(total: 100, used: 0, resetAt: resetAt, displayName: "7d")
+
+        // 周期起点 = 0%
+        let periodStart = resetAt.addingTimeInterval(-sevenDays)
+        XCTAssertEqual(w.expectedPercentByElapsedPeriod(periodSeconds: sevenDays, now: periodStart), 0, accuracy: 0.01)
+        // 周期中点（3.5 天）= 50%
+        let midpoint = resetAt.addingTimeInterval(-sevenDays / 2)
+        XCTAssertEqual(w.expectedPercentByElapsedPeriod(periodSeconds: sevenDays, now: midpoint), 50, accuracy: 0.01)
+        // 周期终点 = 100%
+        XCTAssertEqual(w.expectedPercentByElapsedPeriod(periodSeconds: sevenDays, now: resetAt), 100, accuracy: 0.01)
+        // 越界：晚于 resetAt clamp 到 100%
+        XCTAssertEqual(w.expectedPercentByElapsedPeriod(periodSeconds: sevenDays, now: resetAt.addingTimeInterval(1000)), 100, accuracy: 0.01)
+        // 越界：早于周期起点 clamp 到 0%
+        XCTAssertEqual(w.expectedPercentByElapsedPeriod(periodSeconds: sevenDays, now: periodStart.addingTimeInterval(-1000)), 0, accuracy: 0.01)
+    }
 }

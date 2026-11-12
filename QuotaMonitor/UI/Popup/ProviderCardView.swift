@@ -20,7 +20,11 @@ public struct ProviderCardView: View {
     }
 
     public var body: some View {
-        VStack(alignment: .leading, spacing: Spacing.sm) {
+        let baiduMarker = kind == .baidu
+            ? quota?.primaryWindow.map { BaiduUsageParser.expectedPercent(resetAt: $0.resetAt, now: Date()) }
+            : nil
+
+        return VStack(alignment: .leading, spacing: Spacing.sm) {
             // 标题行
             HStack {
                 Text(kind.displayName)
@@ -31,7 +35,7 @@ public struct ProviderCardView: View {
                 } else if let display = quota?.displayPercent, let raw = quota?.primaryUsedPercent {
                     Text("\(display)%")
                         .font(Typography.heading)
-                        .foregroundColor(SemanticColors.color(for: raw))
+                        .foregroundColor(titleColor(raw: raw, marker: baiduMarker))
                 } else {
                     Text("--")
                         .font(Typography.heading)
@@ -41,17 +45,19 @@ public struct ProviderCardView: View {
 
             // 进度条
             if let window = quota?.primaryWindow {
-                QuotaProgressBar(percent: window.usedPercent)
+                QuotaProgressBar(percent: window.usedPercent, markerPercent: baiduMarker)
                 CountdownLabel(resetAt: window.resetAt)
 
-                // 副窗口（Gemini 每周限额；其他平台有则同样展示）
+                // 副窗口：7 天限额进度条（带「日均应达」参考线，参考千帆算法）
                 if let weekly = quota?.weeklyWindow {
                     HStack(spacing: Spacing.xs) {
                         Text(weekly.displayName)
                             .font(Typography.caption)
                             .foregroundColor(SemanticColors.secondary)
-                        ProgressView(value: weekly.usedPercent, total: 100)
-                            .progressViewStyle(.linear)
+                        QuotaProgressBar(
+                            percent: weekly.usedPercent,
+                            markerPercent: weekly.expectedPercentByElapsedPeriod(periodSeconds: 7 * 24 * 3600)
+                        )
                         Text("\(Int(weekly.usedPercent.rounded()))%")
                             .font(Typography.caption.monospacedDigit())
                             .foregroundColor(SemanticColors.secondary)
@@ -71,6 +77,15 @@ public struct ProviderCardView: View {
         .padding(Spacing.sm)
         .background(SemanticColors.cardBackground)
         .cornerRadius(8)
+    }
+
+    /// 标题百分比数字颜色：耗尽恒红；有日均标记时按「是否超参考线」二值着色，与进度条一致。
+    private func titleColor(raw: Double, marker: Double?) -> Color {
+        if raw >= 100 { return SemanticColors.error }   // 耗尽 → 红
+        if let marker {
+            return raw > marker ? SemanticColors.critical : SemanticColors.normal
+        }
+        return SemanticColors.color(for: raw)
     }
 
     @ViewBuilder

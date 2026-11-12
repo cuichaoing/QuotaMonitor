@@ -386,7 +386,7 @@ private struct VolcengineKeyRow: View {
         VStack(alignment: .leading, spacing: Spacing.xs) {
             HStack {
                 Toggle(isOn: bindingEnabled) {
-                    Text("Volcengine")
+                    Text("火山引擎")
                         .font(.body)
                         .fontWeight(.medium)
                 }

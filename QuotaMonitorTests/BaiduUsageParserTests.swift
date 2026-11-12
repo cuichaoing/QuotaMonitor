@@ -175,4 +175,30 @@ final class BaiduUsageParserTests: XCTestCase {
         XCTAssertEqual(c.hour, 14)
         XCTAssertEqual(c.minute, 51)
     }
+
+    /// 千帆月进度条「日均应达」标记（线性均匀消耗下的期望百分比）
+    func testExpectedPercent_linearNaturalMonth() throws {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "Asia/Shanghai")!
+
+        // 续费日 2026-12-11（自然月），周期 = 2026-11-11 14:51:08 → 12-11（整整 30 天）
+        let resetAt = try XCTUnwrap(
+            cal.date(from: DateComponents(year: 2026, month: 12, day: 11, hour: 14, minute: 51, second: 8)))
+        let periodStart = try XCTUnwrap(cal.date(byAdding: .month, value: -1, to: resetAt))
+
+        // 周期起点 = 0%
+        XCTAssertEqual(BaiduUsageParser.expectedPercent(resetAt: resetAt, now: periodStart), 0, accuracy: 0.01)
+        // 周期中点（11-26，15/30 天）= 50%
+        let midpoint = try XCTUnwrap(cal.date(byAdding: .day, value: 15, to: periodStart))
+        XCTAssertEqual(BaiduUsageParser.expectedPercent(resetAt: resetAt, now: midpoint), 50, accuracy: 0.01)
+        // 周期终点 = 100%
+        XCTAssertEqual(BaiduUsageParser.expectedPercent(resetAt: resetAt, now: resetAt), 100, accuracy: 0.01)
+
+        // 越界：晚于续费日 clamp 到 100%
+        let after = try XCTUnwrap(cal.date(byAdding: .day, value: 5, to: resetAt))
+        XCTAssertEqual(BaiduUsageParser.expectedPercent(resetAt: resetAt, now: after), 100, accuracy: 0.01)
+        // 越界：早于周期起点 clamp 到 0%
+        let before = try XCTUnwrap(cal.date(byAdding: .day, value: -5, to: periodStart))
+        XCTAssertEqual(BaiduUsageParser.expectedPercent(resetAt: resetAt, now: before), 0, accuracy: 0.01)
+    }
 }

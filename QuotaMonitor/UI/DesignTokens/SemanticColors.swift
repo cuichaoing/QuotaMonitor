@@ -19,13 +19,13 @@ public enum SemanticColors {
     public static let cardBackground = Color.gray.opacity(0.08)
     public static let secondary = Color.secondary
 
-    /// 根据已用百分比返回语义颜色
+    /// 根据已用百分比返回语义颜色（三色）：
+    ///   - 绿（normal）：安全范围（< 75%）
+    ///   - 橙（critical）：超过健康阈值、提醒风险，但还能用（75% ~ 100%）
+    ///   - 红（error）：额度耗尽、完全不可用（>= 100%，剩余 0%）
     public static func color(for usedPercent: Double) -> Color {
-        switch usedPercent {
-        case ..<75:    return normal
-        case 75..<90:  return warning
-        case 90..<99:  return critical
-        default:       return error
-        }
+        if usedPercent >= 100 { return error }      // 耗尽
+        if usedPercent >= 75  { return critical }   // 超健康阈值（警告，还能用）
+        return normal                                // 安全
     }
 }

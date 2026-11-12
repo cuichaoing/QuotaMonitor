@@ -68,6 +68,9 @@ public struct KimiProvider: Provider {
             displayName: displayName
         )
 
+        // 周维度：Kimi 响应里 `usage` 字段（注释标「周维度」）的真实结构未确认，实测周数据未能调通。
+        // 暂不接周窗口，保持 weeklyWindow = nil —— Kimi 仅展示 5h 主窗口。
+
         return ProviderQuota(
             provider: kind,
             capturedAt: Date(),

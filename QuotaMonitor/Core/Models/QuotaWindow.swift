@@ -35,4 +35,14 @@ public struct QuotaWindow: Sendable, Equatable {
     public var remainingPercent: Double {
         max(0, 100 - usedPercent)
     }
+
+    /// 按「固定周期匀速消耗」时，`now` 时刻应到达的已用百分比（0-100）。
+    /// 周期 = resetAt − periodSeconds → resetAt（适用于 7 天等固定时长滚动窗口）。
+    /// 进度条据此画「日均应达」竖线，判断实际用量是正常（未超线）还是用超（超线）。
+    public func expectedPercentByElapsedPeriod(periodSeconds: TimeInterval, now: Date = Date()) -> Double {
+        guard periodSeconds > 0 else { return 0 }
+        let periodStart = resetAt.addingTimeInterval(-periodSeconds)
+        let elapsed = now.timeIntervalSince(periodStart)
+        return min(100, max(0, elapsed / periodSeconds * 100))
+    }
 }

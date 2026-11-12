@@ -88,24 +88,14 @@ public struct MiniMaxProvider: Provider {
             displayName: "5h"
         )
 
-        // 周窗口（真实响应里有，之前完全没用上）：weekly_end_time + current_weekly_remaining_percent
-        let weeklyWindow: QuotaWindow? = {
-            guard let weeklyReset = Self.epochMillis(primary["weekly_end_time"]),
-                  let weeklyRemaining = KimiProvider.numericValue(primary["current_weekly_remaining_percent"])
-            else { return nil }
-            return QuotaWindow(
-                total: 100,
-                used: max(0, min(100, 100 - weeklyRemaining)),
-                resetAt: weeklyReset,
-                displayName: "7d"
-            )
-        }()
+        // 周限额：MiniMax 当前订阅每周 unlimited（不限额），不展示 7 天进度条。
+        // weeklyWindow 置 nil，UI 层据此隐藏周进度条。原 weekly_end_time 字段仍可解析，但对当前订阅无意义。
 
         return ProviderQuota(
             provider: kind,
             capturedAt: now,
             primaryWindow: window,
-            weeklyWindow: weeklyWindow,
+            weeklyWindow: nil,
             raw: json
         )
     }

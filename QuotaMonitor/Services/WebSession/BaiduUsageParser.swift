@@ -149,4 +149,17 @@ public enum BaiduUsageParser {
             .trimmingCharacters(in: .whitespacesAndNewlines)
         return Double(cleaned)
     }
+
+    /// 千帆月套餐按「线性均匀消耗」时，`now` 时刻应到达的已用百分比（0-100）。
+    /// 周期 = resetAt 往前推一个自然月 → resetAt（月续费日，非 30 天固定）。
+    /// 进度条据此画「日均应达」竖线标记，并判断实际用量是「正常（未超线）」还是「用超（超线）」。
+    public static func expectedPercent(resetAt: Date, now: Date) -> Double {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "Asia/Shanghai") ?? .current
+        guard let periodStart = cal.date(byAdding: .month, value: -1, to: resetAt) else { return 0 }
+        let total = resetAt.timeIntervalSince(periodStart)
+        guard total > 0 else { return 100 }
+        let elapsed = now.timeIntervalSince(periodStart)
+        return min(100, max(0, elapsed / total * 100))
+    }
 }

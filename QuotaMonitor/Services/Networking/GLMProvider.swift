@@ -96,10 +96,27 @@ public struct GLMProvider: Provider {
             displayName: "\(unitHours)h"
         )
 
+        // 周维度窗口：TOKENS_LIMIT + unit=6（percentage 直接是已用百分比）
+        let weeklyWindow: QuotaWindow? = {
+            guard let weekly = limits.first(where: {
+                ($0["type"] as? String) == "TOKENS_LIMIT"
+                    && (KimiProvider.numericValue($0["unit"]) ?? 0) == 6
+            }) else { return nil }
+            let weeklyPercent = KimiProvider.numericValue(weekly["percentage"]) ?? 0
+            let weeklyResetAt: Date = {
+                if let ms = KimiProvider.numericValue(weekly["nextResetTime"]) {
+                    return Date(timeIntervalSince1970: ms / 1000.0)
+                }
+                return Date().addingTimeInterval(7 * 24 * 3600)
+            }()
+            return QuotaWindow(total: 100, used: weeklyPercent, resetAt: weeklyResetAt, displayName: "7d")
+        }()
+
         return ProviderQuota(
             provider: kind,
             capturedAt: Date(),
             primaryWindow: window,
+            weeklyWindow: weeklyWindow,
             raw: json
         )
     }

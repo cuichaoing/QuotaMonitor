@@ -25,7 +25,7 @@ public enum ProviderKind: String, CaseIterable, Codable, Sendable {
         case .minimax:    return "MiniMax"
         case .glm:        return "Zhipu GLM"
         case .gemini:     return "Google Gemini"
-        case .volcengine: return "Volcengine"
+        case .volcengine: return "火山引擎"
         case .baidu:      return "百度千帆"
         }
     }

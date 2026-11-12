@@ -85,7 +85,7 @@ final class GeminiSessionTests: XCTestCase {
         XCTAssertEqual(ProviderKind.volcengine.shortName, "V")
         XCTAssertEqual(ProviderKind.baidu.shortName, "B")
         XCTAssertEqual(ProviderKind.gemini.displayName, "Google Gemini")
-        XCTAssertEqual(ProviderKind.volcengine.displayName, "Volcengine")
+        XCTAssertEqual(ProviderKind.volcengine.displayName, "火山引擎")
         XCTAssertEqual(ProviderKind.baidu.displayName, "百度千帆")
     }
 }

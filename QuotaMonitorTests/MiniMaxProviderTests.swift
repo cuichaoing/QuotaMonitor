@@ -274,16 +274,13 @@ final class MiniMaxProviderTests: XCTestCase {
         XCTAssertEqual(resetAt.timeIntervalSinceNow, 3600, accuracy: 5)
     }
 
-    /// 周窗口：weekly_end_time + current_weekly_remaining_percent
-    func testWeeklyWindow_parsedFromRealFields() async throws {
+    /// MiniMax 当前订阅每周 unlimited（不限额）：weeklyWindow 置 nil，不展示 7 天进度条
+    func testWeeklyWindow_nilForUnlimitedSubscription() async throws {
         MockURLProtocol.handler = { req in
             MockURLProtocol.jsonResponse(url: req.url!, json: self.realMiniMaxJsonWithTimes)
         }
 
         let quota = try await MiniMaxProvider().fetchQuota(apiKey: "k", using: client)
-        let weekly = try XCTUnwrap(quota.weeklyWindow)
-        XCTAssertEqual(weekly.displayName, "7d")
-        XCTAssertEqual(weekly.usedPercent, 0, accuracy: 0.001)   // 剩余 100% → 已用 0%
-        XCTAssertEqual(weekly.resetAt.timeIntervalSince1970, 1_793_577_600, accuracy: 1)
+        XCTAssertNil(quota.weeklyWindow, "MiniMax 周不限额，不应返回周窗口")
     }
 }

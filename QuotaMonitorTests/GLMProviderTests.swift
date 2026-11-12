@@ -133,6 +133,33 @@ final class GLMProviderTests: XCTestCase {
                        "unit=7 是未知类型，displayName 兜底为 5h（GLM 主窗口语义）")
     }
 
+    /// 周配额 = TOKENS_LIMIT + unit=6，percentage 直接是周维度已用百分比
+    func testWeeklyWindow_parsedFromUnit6() async throws {
+        let json = """
+        {
+            "code": 200,
+            "success": true,
+            "data": {
+                "limits": [
+                    { "type": "TOKENS_LIMIT", "unit": 3, "percentage": 9.0 },
+                    { "type": "TOKENS_LIMIT", "unit": 6, "percentage": 32.0, "nextResetTime": 1784210000000 }
+                ]
+            }
+        }
+        """
+        MockURLProtocol.handler = { req in
+            MockURLProtocol.jsonResponse(url: req.url!, json: json)
+        }
+
+        let quota = try await GLMProvider().fetchQuota(apiKey: "k", using: client)
+        let weekly = try XCTUnwrap(quota.weeklyWindow)
+        XCTAssertEqual(weekly.displayName, "7d")
+        XCTAssertEqual(weekly.usedPercent, 32, accuracy: 0.001,
+                       "unit=6 的 percentage 直接是周维度已用百分比")
+        XCTAssertEqual(weekly.resetAt.timeIntervalSince1970, 1_784_210_000, accuracy: 1,
+                       "nextResetTime 毫秒时间戳应正确换算为秒")
+    }
+
     func testNextResetTime_isMillisecondTimestamp() async throws {
         // nextResetTime 是毫秒时间戳，需正确解析
         // 1784195749973 ms = 2026-06-17 07:15:49 UTC (大约)
